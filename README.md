@@ -15,6 +15,7 @@ https://github.com/user-attachments/assets/e10b4631-7319-4c2f-9686-e1db1322df9c
 
 QuantLab performs analysis on stocks by correlating stock performance with macroeconomic [but not limited to] factors. All computation runs **client-side in your browser** the data never leaves your machine. 
 
+
 ### Key Features
 
 - **Economic Factor Analysis** — Overlay 20 years of macro data (inflation, unemployment, GDP, interest rates, etc.) on any stock
@@ -88,41 +89,8 @@ QuantLab implements 10 econometric and statistical methods:
 
 ## Platform Features
 
-### Economics Page (Active)
-- Search and load any stock/ETF/index
-- Overlay with macro factors
-- Switch between 5Y, 10Y, 15Y, 20Y lookback windows
-- Switch statistical methods on the fly
-- View normalized charts and raw correlation tables
-
-### Portfolio Page (Stub)
-- Add/edit/delete holdings
-- Import holdings from JSON
-- Export portfolio to JSON
-- Planned: cost basis tracking, performance attribution
-
-### Analytics Page (Stub)
-- Planned: factor exposure across portfolio
-- Planned: correlation matrix heatmaps
-- Planned: risk decomposition
-
-### Simulation Page (Stub)
-- Planned: Monte Carlo portfolio paths
-- Planned: scenario analysis
-- Planned: stress testing
-
-### Dashboard Page (Stub)
-- Planned: portfolio overview
-- Planned: alerts on factor divergences
-
-### Fundamentals Page (Stub)
-- Planned: P/E, PEG, debt ratios
-- Planned: earnings history
-- Planned: valuation metrics
-
 ---
 
-## Limitations
 
 ### By Design
 - **Client-side only** — No backend. Limits real-time streaming, persistence, and enterprise features.
@@ -130,11 +98,10 @@ QuantLab implements 10 econometric and statistical methods:
 - **20-year history** — Longer histories available on paid APIs (Bloomberg, FactSet).
 - **No authentication** — Single-user tool. Data stored in localStorage (browser-specific, not synced).
 
-### Known Risks
+### Risks
 - **Yahoo Finance API** — Free tier has no SLA. Subject to rate limits, terms changes, or deprecation.
 - **Custom math implementations** — All statistical methods are hand-coded. Edge-case bugs possible (especially in cointegration, Granger causality). Use at your own risk.
 - **Browser limitations** — Large datasets (10K+ symbols) will slow down. Cache clears wipe portfolio data.
-
 ---
 
 ## Development
@@ -183,38 +150,7 @@ npm start         # Start production server
 npm run lint      # Run ESLint
 ```
 
-### Testing
 
-Currently no tests. Contribution needed:
-- Unit tests for math library (./src/features/analysis/lib/math.ts)
-- Integration tests for analysis flows
-- E2E tests with Playwright
-
----
-
-## Roadmap
-
-### Phase 1 (Current)
-- [x] Economics factor analysis
-- [ ] Unit tests for math library
-- [ ] Portfolio page
-- [ ] Documentation (algorithms, math)
-
-### Phase 2 (Planned)
-- [ ] Backtesting engine (replay strategies over 20y history)
-- [ ] Portfolio optimization (Markowitz mean-variance)
-- [ ] Real-time alerts
-- [ ] PDF reports and email
-
-### Phase 3 (Future)
-- [ ] Backend (persistence, team collaboration)
-- [ ] Institutional API
-- [ ] Alternative data (crypto, commodities, sentiment)
-- [ ] ML-based factor discovery
-- [ ] Desktop app (Tauri/Electron)
-- [ ] Mobile app (React Native)
-
----
 
 ## Contributing
 
@@ -267,11 +203,7 @@ CMD ["npm", "start"]
 
 ---
 
-## License
 
-MIT
-
----
 
 ## FAQ
 
@@ -298,13 +230,5 @@ A: Not yet. QuantLab runs on mobile browsers, but optimized mobile app is planne
 
 ---
 
-## Resources
 
-- [QuantLab Docs](./AGENTS.md) (project guidelines)
-- [Next.js Docs](https://nextjs.org/docs)
-- [MUI Docs](https://mui.com/)
-- [Econometrics Primer](https://en.wikipedia.org/wiki/Econometrics) (Wikipedia)
-
----
-
-**Made with ❤️ for quantitative researchers.**
+**Made with ❤️ for all Quants in the finance industry**
