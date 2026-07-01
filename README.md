@@ -9,6 +9,10 @@ A quantitative portfolio research platform that overlays 20 years of macroeconom
 
 ## Overview
 
+https://github.com/user-attachments/assets/e10b4631-7319-4c2f-9686-e1db1322df9c
+
+
+
 QuantLab performs analysis on stocks by correlating stock performance with macroeconomic [but not limited to] factors. All computation runs **client-side in your browser** the data never leaves your machine. 
 
 ### Key Features
