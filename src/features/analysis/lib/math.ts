@@ -18,11 +18,12 @@ export function stdDev(arr: number[]): number {
 
 function rank(arr: number[]): number[] {
   const sorted = [...arr].map((v, i) => ({ v, i })).sort((a, b) => a.v - b.v)
+  //sorting, by value because js converts everything to strings 
   const ranks = new Array(arr.length)
   let i = 0
   while (i < sorted.length) {
     let j = i
-    while (j < sorted.length - 1 && sorted[j + 1].v === sorted[j].v) j++
+    while (j < sorted.length - 1 && sorted[j + 1].v === sorted[j].v) j++ //note to self: this is one line
     const avgRank = (i + j) / 2 + 1
     for (let k = i; k <= j; k++) ranks[sorted[k].i] = avgRank
     i = j + 1
