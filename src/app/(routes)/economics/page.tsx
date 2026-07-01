@@ -2,24 +2,37 @@
 
 import React, { useState, useCallback, useEffect } from 'react'
 import {
-  Box, Typography, Stack, Paper, Autocomplete, TextField,
+  Box, Typography, Stack, Autocomplete, TextField,
   Button, CircularProgress, Alert, ToggleButton, ToggleButtonGroup,
-  Divider,
 } from '@mui/material'
 import SearchIcon from '@mui/icons-material/Search'
 import ShowChartIcon from '@mui/icons-material/ShowChart'
 import { searchTickers } from '../../../services/marketData'
 import type { SearchResult } from '../../../services/marketData'
 import { useFactorAnalysis } from '../../../features/analysis/hooks/useFactorAnalysis'
-import type { MethodId } from '../../../features/analysis/hooks/useFactorAnalysis'
-import { FactorOverlayChart } from '../../../features/analysis/components/FactorOverlayChart'
+import { FactorOverlayChart, FACTOR_COLORS } from '../../../features/analysis/components/FactorOverlayChart'
 import { FactorSelector } from '../../../features/analysis/components/FactorSelector'
-import { AnalysisPanel } from '../../../features/analysis/components/AnalysisPanel'
+import { StatCardGrid } from '../../../features/analysis/components/StatCardGrid'
+import { ResearchSummary } from '../../../features/analysis/components/ResearchSummary'
+import { getFactorMeta } from '../../../features/analysis/lib/normalize'
 
 const YEAR_RANGES = [5, 10, 15, 20] as const
 
+function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
+  return (
+    <Box
+      sx={{
+        bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
+        borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', ...sx,
+      }}
+    >
+      {children}
+    </Box>
+  )
+}
+
 export default function EconomicsPage() {
-  const { state, setState, loadStock, realign, toggleFactor, computeResults } = useFactorAnalysis()
+  const { state, setState, loadStock, realign, toggleFactor } = useFactorAnalysis()
   const [inputValue, setInputValue] = useState('')
   const [options, setOptions] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
@@ -39,7 +52,6 @@ export default function EconomicsPage() {
     loadStock(selected.symbol, selected.longname || selected.shortname, state.yearRange, state.selectedFactors)
   }, [selected, loadStock, state.yearRange, state.selectedFactors])
 
-  // Year range change — re-align from cached yearly prices, no network call
   const handleYearRange = useCallback((newRange: number) => {
     setState(s => ({ ...s, yearRange: newRange, results: {} }))
     if (state.yearlyPrices.length) {
@@ -54,32 +66,23 @@ export default function EconomicsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.selectedFactors])
 
-  // Auto-run analysis whenever aligned data or active method changes with factors selected
-  useEffect(() => {
-    if (state.aligned && state.selectedFactors.length > 0) {
-      computeResults(state.activeMethod)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.aligned, state.activeMethod])
-
-  const handleMethodChange = useCallback((method: MethodId) => {
-    computeResults(method)
-  }, [computeResults])
+  const rangeLabel = `${state.yearRange}Y`
+  const firstFactor = state.selectedFactors[0]
+  const sampleSize = state.aligned?.years.length ?? 0
 
   return (
     <Box>
-      <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-        <Box>
-          <Typography variant="h4">Economic Factor Analysis</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Overlay 20 years of macro data on any stock · run statistical analysis locally
-          </Typography>
-        </Box>
-      </Stack>
+      {/* Page header */}
+      <Box sx={{ mb: 2.5 }}>
+        <Typography variant="h4" sx={{ fontSize: 20 }}>Relationship Explorer</Typography>
+        <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.4 }}>
+          Analyze macroeconomic factor relationships · normalized overlay · statistical analysis
+        </Typography>
+      </Box>
 
-      {/* Stock search */}
-      <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' } }}>
+      {/* Controls row */}
+      <Panel sx={{ p: 1.5, mb: 1.75 }}>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.25} sx={{ alignItems: { md: 'center' } }}>
           <Autocomplete
             sx={{ flex: 1 }}
             options={options}
@@ -119,49 +122,69 @@ export default function EconomicsPage() {
               </li>
             )}
           />
+
+          {state.chartSeries && (
+            <ToggleButtonGroup
+              value={state.yearRange}
+              exclusive
+              onChange={(_, v) => v && handleYearRange(v)}
+              size="small"
+            >
+              {YEAR_RANGES.map(y => (
+                <ToggleButton key={y} value={y} sx={{ px: 1.5, py: 0.25, fontSize: '0.72rem' }}>
+                  {y}Y
+                </ToggleButton>
+              ))}
+            </ToggleButtonGroup>
+          )}
+
           <Button
             variant="contained"
+            disableElevation
             startIcon={state.loading ? <CircularProgress size={14} color="inherit" /> : <ShowChartIcon />}
             onClick={handleLoad}
             disabled={!selected || state.loading}
-            sx={{ whiteSpace: 'nowrap' }}
+            sx={{ whiteSpace: 'nowrap', textTransform: 'none', fontWeight: 600 }}
           >
             {state.loading ? 'Loading…' : 'Load Chart'}
           </Button>
         </Stack>
-      </Paper>
+      </Panel>
 
-      {/* Year range selector */}
-      {state.chartSeries && (
-        <Stack direction="row" sx={{ alignItems: 'center', mb: 2, gap: 1.5 }}>
-          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
-            YEAR RANGE
-          </Typography>
-          <ToggleButtonGroup
-            value={state.yearRange}
-            exclusive
-            onChange={(_, v) => v && handleYearRange(v)}
-            size="small"
-          >
-            {YEAR_RANGES.map(y => (
-              <ToggleButton key={y} value={y} sx={{ px: 1.5, py: 0.25, fontSize: '0.72rem' }}>
-                {y}Y
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
-          <Typography variant="caption" color="text.disabled">
-            {state.chartSeries.years[0]} – {state.chartSeries.years[state.chartSeries.years.length - 1]}
-            {' '}({state.chartSeries.years.length} data points)
-          </Typography>
-        </Stack>
-      )}
+      {/* Factor chips */}
+      <Stack direction="row" sx={{ gap: 0.75, flexWrap: 'wrap', alignItems: 'center', mb: 2, minHeight: 30 }}>
+        <Typography sx={{ fontSize: 10, fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          Overlays
+        </Typography>
+        {state.selectedFactors.map((fid, idx) => {
+          const color = FACTOR_COLORS[idx % FACTOR_COLORS.length]
+          const meta = getFactorMeta(fid)
+          return (
+            <Box
+              key={fid}
+              sx={{
+                display: 'inline-flex', alignItems: 'center', gap: 0.6, pl: 0.9, pr: 1.1, py: 0.5,
+                borderRadius: '20px', bgcolor: color + '14', border: `1.5px solid ${color}38`,
+                fontSize: 11, fontWeight: 500, color,
+              }}
+            >
+              <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />
+              <span>{meta?.label ?? fid}</span>
+              <Box component="span" onClick={() => toggleFactor(fid)} sx={{ ml: 0.25, opacity: 0.55, fontSize: 10, cursor: 'pointer', lineHeight: 1, '&:hover': { opacity: 1 } }}>✕</Box>
+            </Box>
+          )
+        })}
+        {state.selectedFactors.length === 0 && (
+          <Typography sx={{ fontSize: 11, color: '#cbd5e1', fontStyle: 'italic' }}>Select factors below to overlay</Typography>
+        )}
+      </Stack>
 
       {/* Error */}
       {state.error && <Alert severity="error" sx={{ mb: 2 }}>{state.error}</Alert>}
 
-      {/* Chart */}
+      {/* Hero chart */}
       {state.chartSeries ? (
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2.5 }}>
           <Stack direction="row" sx={{ alignItems: 'center', mb: 1, gap: 1 }}>
             <Typography variant="subtitle2" sx={{ fontFamily: 'monospace', fontWeight: 700 }}>
               {state.symbol}
@@ -175,33 +198,42 @@ export default function EconomicsPage() {
           />
         </Box>
       ) : !state.loading && (
-        <Paper
-          variant="outlined"
-          sx={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3, bgcolor: 'action.hover' }}
-        >
+        <Panel sx={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
           <Box sx={{ textAlign: 'center', color: 'text.disabled' }}>
             <SearchIcon sx={{ fontSize: 40, mb: 1, opacity: 0.3 }} />
             <Typography variant="body2">Search and load a stock to begin</Typography>
           </Box>
-        </Paper>
+        </Panel>
       )}
 
-      <Divider sx={{ mb: 3 }} />
-
-      {/* Factor selector */}
-      <FactorSelector selected={state.selectedFactors} onToggle={toggleFactor} />
-
-      {/* Math analysis panel */}
-      {state.chartSeries && state.selectedFactors.length > 0 && state.aligned && (
-        <AnalysisPanel
-          selectedFactors={state.selectedFactors}
-          results={state.results}
-          activeMethod={state.activeMethod}
+      {/* Statistical analysis cards */}
+      {state.chartSeries && state.aligned && firstFactor && state.aligned.factorValues[firstFactor] && (
+        <StatCardGrid
+          stockPrices={state.aligned.stockPrices}
+          factorValues={state.aligned.factorValues[firstFactor]}
           years={state.aligned.years}
-          stockRaw={state.chartSeries.stockRaw}
-          onMethodChange={handleMethodChange}
+          factorId={firstFactor}
+          symbol={state.symbol}
+          rangeLabel={rangeLabel}
         />
       )}
+
+      {/* Research summary */}
+      {state.chartSeries && state.selectedFactors.length > 0 && (
+        <Box sx={{ mb: 2.5 }}>
+          <ResearchSummary
+            symbol={state.symbol}
+            selectedFactors={state.selectedFactors}
+            rangeLabel={rangeLabel}
+            sampleSize={sampleSize}
+          />
+        </Box>
+      )}
+
+      {/* Factor selector */}
+      <Panel sx={{ p: 2.5 }}>
+        <FactorSelector selected={state.selectedFactors} onToggle={toggleFactor} />
+      </Panel>
     </Box>
   )
 }

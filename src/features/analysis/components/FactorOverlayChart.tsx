@@ -9,10 +9,11 @@ import {
 import { getFactorMeta, zScore, toPctChange, minMaxScale } from '../lib/normalize'
 import type { ChartSeries } from '../hooks/useFactorAnalysis'
 
+// Saturated palette that reads clearly on a white canvas (QuantView light theme).
 export const FACTOR_COLORS = [
-  '#5c8df6', '#f05454', '#4caf50', '#ff9800', '#c678dd',
-  '#00bcd4', '#e91e63', '#8bc34a', '#ff5722', '#26c6da',
-  '#ffc107', '#03a9f4', '#ea80fc', '#69f0ae', '#ff6d00',
+  '#2563eb', '#dc2626', '#d97706', '#7c3aed', '#065f46',
+  '#b45309', '#0891b2', '#be185d', '#1e40af', '#166534',
+  '#92400e', '#0f766e', '#9f1239', '#4338ca', '#ea580c',
 ]
 
 type DisplayMode = 'zscore' | 'pct' | 'minmax'
@@ -214,17 +215,17 @@ export function FactorOverlayChart({ series, symbol, selectedFactors }: FactorOv
 
       <ResponsiveContainer width="100%" height={360}>
         <ComposedChart data={chartData} margin={{ top: 4, right: 24, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis
             dataKey="year"
-            tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             domain={yDomain}
             tickFormatter={yTickFormatter}
-            tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+            tick={{ fontSize: 10, fill: '#94a3b8' }}
             axisLine={false}
             tickLine={false}
             width={58}
@@ -240,16 +241,16 @@ export function FactorOverlayChart({ series, symbol, selectedFactors }: FactorOv
             }
           />
           <Legend wrapperStyle={{ fontSize: '0.72rem', paddingTop: 8 }} />
-          <ReferenceLine y={mode === 'minmax' ? 50 : 0} stroke="rgba(255,255,255,0.12)" strokeDasharray="4 4" />
+          <ReferenceLine y={mode === 'minmax' ? 50 : 0} stroke="#e2e8f0" strokeDasharray="4 4" />
 
           <Line
             type="monotone"
             dataKey={symbol}
-            stroke="#ffffff"
-            strokeWidth={2}
+            stroke="#0f172a"
+            strokeWidth={2.5}
             dot={false}
             connectNulls={false}
-            activeDot={{ r: 3, fill: '#ffffff' }}
+            activeDot={{ r: 3, fill: '#0f172a' }}
           />
 
           {selectedFactors.map((fid, idx) => {

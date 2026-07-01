@@ -5,61 +5,64 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import { NextAppDirEmotionCacheProvider } from './registry'
 
+// QuantView light theme — slate/blue palette from the design system.
 const theme = createTheme({
   palette: {
-    mode: 'dark',
+    mode: 'light',
     primary: {
-      main: '#4fc3f7',
-      dark: '#0288d1',
-      light: '#81d4fa',
+      main: '#2563eb',
+      dark: '#1d4ed8',
+      light: '#93c5fd',
     },
     secondary: {
-      main: '#80cbc4',
+      main: '#0891b2',
     },
     background: {
-      default: '#0a0e1a',
-      paper: '#111827',
+      default: '#f1f5f9',
+      paper: '#ffffff',
     },
-    divider: 'rgba(255,255,255,0.08)',
-    success: {
-      main: '#4caf50',
+    text: {
+      primary: '#0f172a',
+      secondary: '#64748b',
+      disabled: '#94a3b8',
     },
-    error: {
-      main: '#f44336',
-    },
+    divider: '#e2e8f0',
+    success: { main: '#16a34a' },
+    warning: { main: '#d97706' },
+    error: { main: '#dc2626' },
   },
   typography: {
-    fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h4: { fontWeight: 700 },
-    h5: { fontWeight: 600 },
-    h6: { fontWeight: 600 },
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    h4: { fontWeight: 700, letterSpacing: '-0.5px' },
+    h5: { fontWeight: 700, letterSpacing: '-0.4px' },
+    h6: { fontWeight: 700, letterSpacing: '-0.3px' },
   },
   shape: {
-    borderRadius: 8,
+    borderRadius: 12,
   },
   components: {
     MuiPaper: {
       styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
+        root: { backgroundImage: 'none' },
+        outlined: { borderColor: '#e2e8f0' },
+      },
+    },
+    MuiCssBaseline: {
+      styleOverrides: {
+        body: { backgroundColor: '#f1f5f9' },
+        '::-webkit-scrollbar': { width: 6, height: 6 },
+        '::-webkit-scrollbar-thumb': { background: '#cbd5e1', borderRadius: 3 },
+        '::-webkit-scrollbar-track': { background: 'transparent' },
       },
     },
     MuiTableCell: {
       styleOverrides: {
         head: {
           fontWeight: 600,
-          fontSize: '0.75rem',
+          fontSize: '0.7rem',
           textTransform: 'uppercase',
-          letterSpacing: '0.05em',
-          color: 'rgba(255,255,255,0.5)',
-        },
-      },
-    },
-    MuiDrawer: {
-      styleOverrides: {
-        paper: {
-          background: '#0d1117',
+          letterSpacing: '0.04em',
+          color: '#94a3b8',
         },
       },
     },
