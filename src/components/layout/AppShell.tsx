@@ -92,7 +92,7 @@ export function AppShell({ children }: AppShellProps) {
         <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
           <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22c55e', boxShadow: '0 0 0 2px #bbf7d0' }} />
           <Box component="span" sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500 }}>
-            Live · 2004–2024
+            Live · 2004–2025
           </Box>
         </Box>
       </Box>
