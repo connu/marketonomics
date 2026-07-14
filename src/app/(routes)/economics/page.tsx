@@ -10,7 +10,8 @@ import ShowChartIcon from '@mui/icons-material/ShowChart'
 import { searchTickers } from '../../../services/marketData'
 import type { SearchResult } from '../../../services/marketData'
 import { useFactorAnalysis } from '../../../features/analysis/hooks/useFactorAnalysis'
-import { FactorOverlayChart, FACTOR_COLORS } from '../../../features/analysis/components/FactorOverlayChart'
+import { FactorOverlayChart } from '../../../features/analysis/components/FactorOverlayChart'
+import { useDesignMode } from '../../ThemeRegistry'
 import { FactorSelector } from '../../../features/analysis/components/FactorSelector'
 import { StatCardGrid } from '../../../features/analysis/components/StatCardGrid'
 import { ResearchSummary } from '../../../features/analysis/components/ResearchSummary'
@@ -19,11 +20,12 @@ import { getFactorMeta } from '../../../features/analysis/lib/normalize'
 const YEAR_RANGES = [5, 10, 15, 20] as const
 
 function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
+  const { tokens } = useDesignMode()
   return (
     <Box
       sx={{
         bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
-        borderRadius: '14px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', ...sx,
+        borderRadius: '14px', boxShadow: tokens.panelShadow, ...sx,
       }}
     >
       {children}
@@ -32,6 +34,7 @@ function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
 }
 
 export default function EconomicsPage() {
+  const { tokens } = useDesignMode()
   const { state, setState, loadStock, realign, toggleFactor } = useFactorAnalysis()
   const [inputValue, setInputValue] = useState('')
   const [options, setOptions] = useState<SearchResult[]>([])
@@ -157,7 +160,7 @@ export default function EconomicsPage() {
           Overlays
         </Typography>
         {state.selectedFactors.map((fid, idx) => {
-          const color = FACTOR_COLORS[idx % FACTOR_COLORS.length]
+          const color = tokens.overlayFactorColors[idx % tokens.overlayFactorColors.length]
           const meta = getFactorMeta(fid)
           return (
             <Box
@@ -175,7 +178,7 @@ export default function EconomicsPage() {
           )
         })}
         {state.selectedFactors.length === 0 && (
-          <Typography sx={{ fontSize: 11, color: '#cbd5e1', fontStyle: 'italic' }}>Select factors below to overlay</Typography>
+          <Typography sx={{ fontSize: 11, color: tokens.textFaint, fontStyle: 'italic' }}>Select factors below to overlay</Typography>
         )}
       </Stack>
 

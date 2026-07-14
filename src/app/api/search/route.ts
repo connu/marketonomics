@@ -28,10 +28,16 @@ export async function GET(req: NextRequest) {
   }
 
   const data = await res.json()
+  // Yahoo can return the same symbol on multiple exchanges; symbol is the
+  // app-wide identity (React keys, quote lookups), so keep only the first hit.
+  const seen = new Set<string>()
   const quotes: SearchResult[] = (data?.quotes ?? [])
-    .filter((q: Record<string, unknown>) =>
-      q.quoteType === 'EQUITY' || q.quoteType === 'ETF' || q.quoteType === 'INDEX'
-    )
+    .filter((q: Record<string, unknown>) => {
+      if (q.quoteType !== 'EQUITY' && q.quoteType !== 'ETF' && q.quoteType !== 'INDEX') return false
+      if (typeof q.symbol !== 'string' || seen.has(q.symbol)) return false
+      seen.add(q.symbol)
+      return true
+    })
     .map((q: Record<string, unknown>) => ({
       symbol: q.symbol,
       shortname: q.shortname ?? q.symbol,

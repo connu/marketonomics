@@ -68,6 +68,14 @@ export function alignData(
   return { years, stockPrices, factorValues }
 }
 
+// Align stock yearly closes onto the full FACTOR_YEARS axis (NaN where no data)
+export function toFactorYearValues(
+  stockYearly: { year: number; close: number }[]
+): number[] {
+  const byYear = Object.fromEntries(stockYearly.map(p => [p.year, p.close]))
+  return factorsData.years.map(y => byYear[y] ?? NaN)
+}
+
 // Normalize to % change from first value (base = 0%)
 export function toPctChange(values: number[]): number[] {
   const base = values[0]

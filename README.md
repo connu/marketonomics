@@ -4,6 +4,10 @@ A quantitative portfolio research platform that overlays 20 years of macroeconom
 
 **Analyze. Understand. Decide.**
 
+## Documentation
+
+Full user and developer documentation lives in [`docs/README.md`](docs/README.md).
+
 
 ---
 

@@ -7,15 +7,16 @@ import {
 } from '@mui/material'
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ReferenceLine, LineChart, Line, Legend, ScatterChart, Scatter,
+  Tooltip, ReferenceLine, LineChart, Line, ScatterChart, Scatter,
 } from 'recharts'
 import { getFactorMeta } from '../lib/normalize'
-import { FACTOR_COLORS } from './FactorOverlayChart'
+import { useDesignMode } from '../../../app/ThemeRegistry'
+import type { ChartTokens, DesignTokens } from '../../../theme/tokens'
 import type { MethodId } from '../hooks/useFactorAnalysis'
 import { METHOD_LABELS } from '../hooks/useFactorAnalysis'
 import type {
   AnalysisResult, CrossCorrelationResult, LinearRegressionResult,
-  RollingCorrelationResult, GrangerResult, MonteCarloResult,
+  RollingCorrelationResult, MonteCarloResult,
   ElasticityResult,
 } from '../lib/math'
 
@@ -40,9 +41,9 @@ function pChip(pValue: number) {
   return <Chip label={label} size="small" color={color} variant="outlined" sx={{ fontSize: '0.65rem', height: 18 }} />
 }
 
-function rBar(r: number) {
+function rBar(r: number, t: DesignTokens) {
   const pct = Math.abs(r) * 100
-  const color = Math.abs(r) > 0.7 ? '#4caf50' : Math.abs(r) > 0.4 ? '#ff9800' : '#f44336'
+  const color = Math.abs(r) > 0.7 ? t.pos : Math.abs(r) > 0.4 ? t.warn : t.neg
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
       <LinearProgress
@@ -58,15 +59,17 @@ function rBar(r: number) {
 }
 
 function CrossCorrChart({ result, color }: { result: CrossCorrelationResult; color: string }) {
+  const { tokens } = useDesignMode()
+  const ct: ChartTokens = tokens.chart
   const data = result.lags.map((lag, i) => ({ lag, r: result.correlations[i] }))
   return (
     <ResponsiveContainer width="100%" height={180}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="lag" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} label={{ value: 'Lag (years)', position: 'insideBottom', offset: -4, fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} />
-        <YAxis domain={[-1, 1]} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => (typeof v === 'number' ? v.toFixed(3) : v)} />
-        <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+        <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
+        <XAxis dataKey="lag" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} label={{ value: 'Lag (years)', position: 'insideBottom', offset: -4, fontSize: 9, fill: ct.tick }} />
+        <YAxis domain={[-1, 1]} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <Tooltip formatter={(v) => (typeof v === 'number' ? v.toFixed(3) : v)} contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} />
+        <ReferenceLine y={0} stroke={ct.refLine} />
         <Bar dataKey="r" fill={color} />
       </BarChart>
     </ResponsiveContainer>
@@ -76,14 +79,16 @@ function CrossCorrChart({ result, color }: { result: CrossCorrelationResult; col
 function LinRegChart({ result, factorLabel, years, factorVals, color }: {
   result: LinearRegressionResult; factorLabel: string; years: number[]; factorVals: number[]; color: string
 }) {
+  const { tokens } = useDesignMode()
+  const ct: ChartTokens = tokens.chart
   const data = years.map((y, i) => ({ year: String(y), actual: result.predictions[i] !== undefined ? factorVals[i] : 0, predicted: result.predictions[i] ?? 0 }))
   return (
     <ResponsiveContainer width="100%" height={160}>
       <ScatterChart margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="actual" name={factorLabel} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <YAxis dataKey="predicted" name="Stock Price" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <Tooltip cursor={{ strokeDasharray: '3 3' }} />
+        <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
+        <XAxis dataKey="actual" name={factorLabel} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <YAxis dataKey="predicted" name="Stock Price" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <Tooltip cursor={ct.scatterCursor} contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} />
         <Scatter data={data} fill={color} opacity={0.8} />
       </ScatterChart>
     </ResponsiveContainer>
@@ -91,15 +96,17 @@ function LinRegChart({ result, factorLabel, years, factorVals, color }: {
 }
 
 function RollingCorrChart({ result, color }: { result: RollingCorrelationResult; color: string }) {
+  const { tokens } = useDesignMode()
+  const ct: ChartTokens = tokens.chart
   const data = result.years.map((y, i) => ({ year: String(y), r: isNaN(result.correlations[i]) ? null : result.correlations[i] }))
   return (
     <ResponsiveContainer width="100%" height={160}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <YAxis domain={[-1, 1]} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => (typeof v === 'number' ? v?.toFixed(3) : v)} />
-        <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+        <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
+        <XAxis dataKey="year" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <YAxis domain={[-1, 1]} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <Tooltip formatter={(v) => (typeof v === 'number' ? v?.toFixed(3) : v)} contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} />
+        <ReferenceLine y={0} stroke={ct.refLine} />
         <Line type="monotone" dataKey="r" stroke={color} strokeWidth={1.5} dot={false} connectNulls={false} />
       </LineChart>
     </ResponsiveContainer>
@@ -107,36 +114,39 @@ function RollingCorrChart({ result, color }: { result: RollingCorrelationResult;
 }
 
 function MonteCarloChart({ result }: { result: MonteCarloResult }) {
+  const { tokens } = useDesignMode()
+  const ct: ChartTokens = tokens.chart
   const xLabels = Array.from({ length: result.years + 1 }, (_, i) => i)
   const data = xLabels.map(t => {
-    const vals = result.paths.map(p => p[t]).filter(v => v != null)
     return { t: `+${t}y`, sample1: result.paths[0]?.[t], sample2: result.paths[1]?.[t], sample3: result.paths[2]?.[t] }
   })
   return (
     <ResponsiveContainer width="100%" height={180}>
       <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-        <XAxis dataKey="t" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.3)' }} axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={v => `$${v?.toFixed(0)}`} tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.3)' }} axisLine={false} tickLine={false} width={60} />
-        <Tooltip formatter={(v) => (typeof v === 'number' ? `$${v.toFixed(2)}` : v)} />
-        <Line type="monotone" dataKey="sample1" stroke="#5c8df6" strokeWidth={1} dot={false} strokeOpacity={0.6} />
-        <Line type="monotone" dataKey="sample2" stroke="#4caf50" strokeWidth={1} dot={false} strokeOpacity={0.6} />
-        <Line type="monotone" dataKey="sample3" stroke="#ff9800" strokeWidth={1} dot={false} strokeOpacity={0.6} />
+        <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
+        <XAxis dataKey="t" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <YAxis tickFormatter={v => `$${v?.toFixed(0)}`} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} width={60} />
+        <Tooltip formatter={(v) => (typeof v === 'number' ? `$${v.toFixed(2)}` : v)} contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} />
+        <Line type="monotone" dataKey="sample1" stroke={tokens.accent} strokeWidth={1} dot={false} strokeOpacity={0.6} />
+        <Line type="monotone" dataKey="sample2" stroke={tokens.pos} strokeWidth={1} dot={false} strokeOpacity={0.6} />
+        <Line type="monotone" dataKey="sample3" stroke={tokens.warn} strokeWidth={1} dot={false} strokeOpacity={0.6} />
       </LineChart>
     </ResponsiveContainer>
   )
 }
 
 function ElasticityChart({ result, color }: { result: ElasticityResult; color: string }) {
+  const { tokens } = useDesignMode()
+  const ct: ChartTokens = tokens.chart
   const data = result.years.map((y, i) => ({ year: String(y), e: result.pointElasticities[i] }))
   return (
     <ResponsiveContainer width="100%" height={160}>
       <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-        <XAxis dataKey="year" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.4)' }} axisLine={false} tickLine={false} />
-        <Tooltip formatter={(v) => (typeof v === 'number' ? v.toFixed(3) : v)} />
-        <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" />
+        <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
+        <XAxis dataKey="year" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
+        <Tooltip formatter={(v) => (typeof v === 'number' ? v.toFixed(3) : v)} contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} />
+        <ReferenceLine y={0} stroke={ct.refLine} />
         <Bar dataKey="e" fill={color} />
       </BarChart>
     </ResponsiveContainer>
@@ -148,8 +158,9 @@ function FactorResult({
 }: {
   factorId: string; result: AnalysisResult; idx: number; years: number[]; factorVals: number[]
 }) {
+  const { tokens } = useDesignMode()
   const meta = getFactorMeta(factorId)
-  const color = FACTOR_COLORS[idx % FACTOR_COLORS.length]
+  const color = tokens.overlayFactorColors[idx % tokens.overlayFactorColors.length]
   if (!meta) return null
 
   const renderVisual = () => {
@@ -168,7 +179,7 @@ function FactorResult({
       case 'pearson': return (
         <Table size="small">
           <TableBody>
-            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Pearson r</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.r)}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Pearson r</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.r, tokens)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>R²</TableCell><TableCell sx={{ fontSize: '0.78rem', fontFamily: 'monospace', border: 0 }}>{(result.r**2).toFixed(4)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Significance</TableCell><TableCell sx={{ border: 0 }}>{pChip(result.pValue)}</TableCell></TableRow>
           </TableBody>
@@ -177,7 +188,7 @@ function FactorResult({
       case 'spearman': return (
         <Table size="small">
           <TableBody>
-            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Spearman ρ</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.rho)}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Spearman ρ</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.rho, tokens)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Significance</TableCell><TableCell sx={{ border: 0 }}>{pChip(result.pValue)}</TableCell></TableRow>
           </TableBody>
         </Table>
@@ -186,7 +197,7 @@ function FactorResult({
         <Table size="small">
           <TableBody>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Peak Lag</TableCell><TableCell sx={{ fontSize: '0.78rem', fontFamily: 'monospace', border: 0 }}>{result.peakLag} year(s)</TableCell></TableRow>
-            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Peak r</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.peakCorrelation)}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Peak r</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.peakCorrelation, tokens)}</TableCell></TableRow>
           </TableBody>
         </Table>
       )
@@ -195,7 +206,7 @@ function FactorResult({
           <TableBody>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Slope</TableCell><TableCell sx={{ fontSize: '0.78rem', fontFamily: 'monospace', border: 0 }}>{result.slope.toFixed(4)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Intercept</TableCell><TableCell sx={{ fontSize: '0.78rem', fontFamily: 'monospace', border: 0 }}>{result.intercept.toFixed(2)}</TableCell></TableRow>
-            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>R²</TableCell><TableCell sx={{ border: 0 }}>{rBar(Math.sqrt(result.r2))}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>R²</TableCell><TableCell sx={{ border: 0 }}>{rBar(Math.sqrt(result.r2), tokens)}</TableCell></TableRow>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Significance</TableCell><TableCell sx={{ border: 0 }}>{pChip(result.pValue)}</TableCell></TableRow>
           </TableBody>
         </Table>
@@ -249,7 +260,7 @@ function FactorResult({
         <Table size="small">
           <TableBody>
             <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Mutual Information</TableCell><TableCell sx={{ fontSize: '0.78rem', fontFamily: 'monospace', border: 0 }}>{result.mi.toFixed(4)} nats</TableCell></TableRow>
-            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Normalized MI</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.normalizedMI)}</TableCell></TableRow>
+            <TableRow><TableCell sx={{ color: 'text.secondary', fontSize: '0.72rem', border: 0 }}>Normalized MI</TableCell><TableCell sx={{ border: 0 }}>{rBar(result.normalizedMI, tokens)}</TableCell></TableRow>
           </TableBody>
         </Table>
       )
@@ -272,7 +283,7 @@ function FactorResult({
 }
 
 export function AnalysisPanel({
-  selectedFactors, results, activeMethod, years, stockRaw, onMethodChange,
+  selectedFactors, results, activeMethod, years, onMethodChange,
 }: AnalysisPanelProps) {
   if (!selectedFactors.length) return null
 
@@ -308,10 +319,8 @@ export function AnalysisPanel({
           {selectedFactors.map((fid, idx) => {
             const result = results[fid]
             if (!result) return null
-            const factorVals = years.map((_, i) => {
-              // Pass through raw factor data via result (use predictions for regression, raw otherwise)
-              return 0
-            })
+            // Pass through raw factor data via result (use predictions for regression, raw otherwise)
+            const factorVals = years.map(() => 0)
             return (
               <FactorResult
                 key={fid}

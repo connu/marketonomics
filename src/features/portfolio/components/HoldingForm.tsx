@@ -59,8 +59,22 @@ function parsePositiveNumber(value: string): number | null {
   return isFinite(n) && n > 0 ? n : null
 }
 
+function toFormData(holding: Holding): HoldingFormData {
+  return {
+    company: holding.company,
+    ticker: holding.ticker,
+    shares: String(holding.shares),
+    purchasePrice: String(holding.purchasePrice),
+    currentPrice: String(holding.currentPrice),
+    sector: holding.sector,
+    industry: holding.industry,
+  }
+}
+
 export function HoldingForm({ open, onClose, onSubmit, initialData }: HoldingFormProps) {
-  const [form, setForm] = useState<HoldingFormData>(EMPTY_FORM)
+  const [form, setForm] = useState<HoldingFormData>(() =>
+    initialData ? toFormData(initialData) : EMPTY_FORM
+  )
   const [errors, setErrors] = useState<Partial<Record<keyof HoldingFormData, string>>>({})
 
   const [searchOptions, setSearchOptions] = useState<SearchResult[]>([])
@@ -69,34 +83,30 @@ export function HoldingForm({ open, onClose, onSubmit, initialData }: HoldingFor
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [quoteLoading, setQuoteLoading] = useState(false)
-  const [quoteFetched, setQuoteFetched] = useState(false)
+  const [quoteFetched, setQuoteFetched] = useState(!!initialData)
   const [quoteError, setQuoteError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (initialData) {
-      setForm({
-        company: initialData.company,
-        ticker: initialData.ticker,
-        shares: String(initialData.shares),
-        purchasePrice: String(initialData.purchasePrice),
-        currentPrice: String(initialData.currentPrice),
-        sector: initialData.sector,
-        industry: initialData.industry,
-      })
-      setQuoteFetched(true)
-    } else {
-      setForm(EMPTY_FORM)
-      setQuoteFetched(false)
-    }
+  // Reset the dialog when it reopens or switches holdings — state adjusted
+  // during render (per React's "adjusting state when props change" pattern)
+  // rather than in an effect.
+  const [prevReset, setPrevReset] = useState<{ open: boolean; initialData?: Holding | null }>({
+    open,
+    initialData,
+  })
+  if (prevReset.open !== open || prevReset.initialData !== initialData) {
+    setPrevReset({ open, initialData })
+    setForm(initialData ? toFormData(initialData) : EMPTY_FORM)
+    setQuoteFetched(!!initialData)
     setErrors({})
     setSearchOptions([])
     setQuoteError(null)
     setSearchInput('')
-  }, [initialData, open])
+  }
 
   useEffect(() => {
-    if (!searchInput || searchInput.length < 1) {
-      setSearchOptions([])
+    if (!searchInput) {
+      // Options are cleared where the input changes; just drop any pending search.
+      if (searchTimeout.current) clearTimeout(searchTimeout.current)
       return
     }
     if (searchTimeout.current) clearTimeout(searchTimeout.current)
@@ -184,7 +194,10 @@ export function HoldingForm({ open, onClose, onSubmit, initialData }: HoldingFor
               options={searchOptions}
               loading={searchLoading}
               inputValue={searchInput}
-              onInputChange={(_, v) => setSearchInput(v)}
+              onInputChange={(_, v) => {
+                setSearchInput(v)
+                if (!v) setSearchOptions([])
+              }}
               onChange={handleTickerSelect}
               filterOptions={(x) => x}
               getOptionLabel={(o) => `${o.symbol} — ${o.shortname}`}

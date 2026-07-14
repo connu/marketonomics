@@ -3,18 +3,20 @@
 import React, { useState, useMemo } from 'react'
 import { Box, Typography, Paper, ToggleButtonGroup, ToggleButton, Stack } from '@mui/material'
 import {
-  ResponsiveContainer, ComposedChart, Line, XAxis, YAxis,
+  ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts'
 import { getFactorMeta, zScore, toPctChange, minMaxScale } from '../lib/normalize'
 import type { ChartSeries } from '../hooks/useFactorAnalysis'
+import { useDesignMode } from '../../../app/ThemeRegistry'
 
-// Saturated palette that reads clearly on a white canvas (QuantView light theme).
-export const FACTOR_COLORS = [
-  '#2563eb', '#dc2626', '#d97706', '#7c3aed', '#065f46',
-  '#b45309', '#0891b2', '#be185d', '#1e40af', '#166534',
-  '#92400e', '#0f766e', '#9f1239', '#4338ca', '#ea580c',
-]
+// The series palettes (classic + TradingView) live in src/theme/tokens.ts;
+// mode-aware code reads them via useDesignMode().tokens.factorColors.
+
+/** SVG ids must not contain symbol characters like ^ or : */
+function svgId(prefix: string, raw: string): string {
+  return `${prefix}-${raw.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+}
 
 type DisplayMode = 'zscore' | 'pct' | 'minmax'
 
@@ -81,7 +83,6 @@ function CustomTooltip({
       </Typography>
       {payload.map((entry) => {
         const rawArr = rawByKey[entry.dataKey]
-        const yearIdx = payload[0] ? payload.indexOf(entry) : -1
         const rawVal = rawArr ? rawArr[payload.indexOf(entry)] : undefined
         const unit = unitByKey[entry.dataKey] ?? ''
         return (
@@ -114,6 +115,9 @@ interface FactorOverlayChartProps {
 
 export function FactorOverlayChart({ series, symbol, selectedFactors }: FactorOverlayChartProps) {
   const [mode, setMode] = useState<DisplayMode>('zscore')
+  const { tokens } = useDesignMode()
+  const chartTokens = tokens.chart
+  const gradientId = svgId('overlay-grad', symbol)
 
   // Normalized values per series for the chosen mode
   const normalizedStock = useMemo(() => applyMode(series.stockRaw, mode), [series.stockRaw, mode])
@@ -215,22 +219,31 @@ export function FactorOverlayChart({ series, symbol, selectedFactors }: FactorOv
 
       <ResponsiveContainer width="100%" height={360}>
         <ComposedChart data={chartData} margin={{ top: 4, right: 24, bottom: 0, left: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+          {chartTokens.areaGradient && (
+            <defs>
+              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor={chartTokens.primary} stopOpacity={0.25} />
+                <stop offset="95%" stopColor={chartTokens.primary} stopOpacity={0} />
+              </linearGradient>
+            </defs>
+          )}
+          <CartesianGrid strokeDasharray={chartTokens.gridDash} stroke={chartTokens.gridAlt} />
           <XAxis
             dataKey="year"
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: chartTokens.tick }}
             axisLine={false}
             tickLine={false}
           />
           <YAxis
             domain={yDomain}
             tickFormatter={yTickFormatter}
-            tick={{ fontSize: 10, fill: '#94a3b8' }}
+            tick={{ fontSize: 10, fill: chartTokens.tick }}
             axisLine={false}
             tickLine={false}
             width={58}
           />
           <Tooltip
+            cursor={chartTokens.cursor ?? true}
             content={
               <CustomTooltip
                 mode={mode}
@@ -241,22 +254,34 @@ export function FactorOverlayChart({ series, symbol, selectedFactors }: FactorOv
             }
           />
           <Legend wrapperStyle={{ fontSize: '0.72rem', paddingTop: 8 }} />
-          <ReferenceLine y={mode === 'minmax' ? 50 : 0} stroke="#e2e8f0" strokeDasharray="4 4" />
+          <ReferenceLine y={mode === 'minmax' ? 50 : 0} stroke={chartTokens.refLine} strokeDasharray="4 4" />
 
+          {chartTokens.areaGradient && (
+            <Area
+              type="monotone"
+              dataKey={symbol}
+              stroke="none"
+              fill={`url(#${gradientId})`}
+              connectNulls={false}
+              activeDot={false}
+              legendType="none"
+              tooltipType="none"
+            />
+          )}
           <Line
             type="monotone"
             dataKey={symbol}
-            stroke="#0f172a"
-            strokeWidth={2.5}
+            stroke={chartTokens.primary}
+            strokeWidth={chartTokens.primaryWidth}
             dot={false}
             connectNulls={false}
-            activeDot={{ r: 3, fill: '#0f172a' }}
+            activeDot={{ r: 3, fill: chartTokens.primary }}
           />
 
           {selectedFactors.map((fid, idx) => {
             const meta = getFactorMeta(fid)
             if (!meta) return null
-            const color = FACTOR_COLORS[idx % FACTOR_COLORS.length]
+            const color = tokens.overlayFactorColors[idx % tokens.overlayFactorColors.length]
             return (
               <Line
                 key={fid}

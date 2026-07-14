@@ -3,6 +3,7 @@
 import React from 'react'
 import { Box, Typography, Stack } from '@mui/material'
 import { getFactorMeta } from '../lib/normalize'
+import { useDesignMode } from '../../../app/ThemeRegistry'
 
 interface ResearchSummaryProps {
   symbol: string
@@ -12,6 +13,7 @@ interface ResearchSummaryProps {
 }
 
 export function ResearchSummary({ symbol, selectedFactors, rangeLabel, sampleSize }: ResearchSummaryProps) {
+  const { tokens } = useDesignMode()
   const labels = selectedFactors.map(f => getFactorMeta(f)?.label ?? f).join(', ')
   const summary = selectedFactors.length === 0
     ? 'Select factor overlays above to generate a statistical summary.'
@@ -21,23 +23,23 @@ export function ResearchSummary({ symbol, selectedFactors, rangeLabel, sampleSiz
     <Box
       sx={{
         bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
-        borderRadius: '14px', p: '22px 24px', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        borderRadius: '14px', p: '22px 24px', boxShadow: tokens.panelShadow,
       }}
     >
       <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 1.75 }}>
         <Box sx={{ width: 3, height: 18, bgcolor: 'primary.main', borderRadius: '2px' }} />
         <Typography sx={{ fontSize: 14, fontWeight: 700 }}>Research Summary</Typography>
-        <Box sx={{ fontSize: 10, fontWeight: 600, color: 'primary.main', px: 0.9, py: '2px', bgcolor: '#eff6ff', borderRadius: '4px', letterSpacing: '0.3px' }}>
+        <Box sx={{ fontSize: 10, fontWeight: 600, color: 'primary.main', px: 0.9, py: '2px', bgcolor: tokens.accentBg, borderRadius: '4px', letterSpacing: '0.3px' }}>
           AI · GENERATED
         </Box>
       </Stack>
-      <Typography sx={{ fontSize: 13, color: '#374151', lineHeight: 1.75 }}>{summary}</Typography>
+      <Typography sx={{ fontSize: 13, color: tokens.textBody, lineHeight: 1.75 }}>{summary}</Typography>
       {selectedFactors.length > 0 && (
-        <Stack direction="row" sx={{ gap: 2, mt: 1.75, pt: 1.75, borderTop: '1px solid', borderColor: '#f1f5f9', flexWrap: 'wrap' }}>
+        <Stack direction="row" sx={{ gap: 2, mt: 1.75, pt: 1.75, borderTop: '1px solid', borderColor: tokens.hairline, flexWrap: 'wrap' }}>
           {[
-            { c: '#22c55e', t: 'Confidence: High' },
-            { c: '#f59e0b', t: `Sample size: ${sampleSize} obs.` },
-            { c: '#2563eb', t: `Period: ${rangeLabel}` },
+            { c: tokens.liveDot, t: 'Confidence: High' },
+            { c: tokens.warn, t: `Sample size: ${sampleSize} obs.` },
+            { c: tokens.accent, t: `Period: ${rangeLabel}` },
           ].map(({ c, t }) => (
             <Box key={t} sx={{ display: 'flex', alignItems: 'center', gap: 0.6 }}>
               <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: c }} />

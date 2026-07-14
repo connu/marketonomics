@@ -23,6 +23,7 @@ import {
 import { Indicator, IndicatorQuote } from '../types/indicator'
 import { useIndicatorHistory } from '../hooks/useIndicators'
 import { formatNumber } from '../../../utils/format'
+import { useDesignMode } from '../../../app/ThemeRegistry'
 
 const RANGES = ['1mo', '3mo', '6mo', '1y', '2y', '5y'] as const
 type Range = (typeof RANGES)[number]
@@ -67,6 +68,8 @@ function CustomTooltip({ active, payload, label, unit }: any) {
 }
 
 export function IndicatorChart({ indicator, quote }: IndicatorChartProps) {
+  const { tokens } = useDesignMode()
+  const ct = tokens.chart
   const [range, setRange] = React.useState<Range>('1y')
   const { history, loading } = useIndicatorHistory(indicator.symbol, range)
 
@@ -74,8 +77,7 @@ export function IndicatorChart({ indicator, quote }: IndicatorChartProps) {
   const isPositive = history.length > 1
     ? history[history.length - 1].close >= firstClose
     : (quote?.change ?? 0) >= 0
-  const stroke = isPositive ? '#4caf50' : '#f44336'
-  const fill = isPositive ? 'rgba(76,175,80,0.15)' : 'rgba(244,67,54,0.12)'
+  const stroke = isPositive ? tokens.pos : tokens.neg
 
   const ticks = useMemo(() => {
     if (!history.length) return []
@@ -132,28 +134,28 @@ export function IndicatorChart({ indicator, quote }: IndicatorChartProps) {
                 <stop offset="95%" stopColor={stroke} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
             <XAxis
               dataKey="date"
               ticks={ticks}
               tickFormatter={(v) => formatXAxis(v, range)}
-              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+              tick={{ fontSize: 10, fill: ct.tick }}
               axisLine={false}
               tickLine={false}
             />
             <YAxis
               domain={domain}
               tickFormatter={formatYAxis}
-              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.4)' }}
+              tick={{ fontSize: 10, fill: ct.tick }}
               axisLine={false}
               tickLine={false}
               width={55}
             />
             <Tooltip
               content={<CustomTooltip unit={indicator.unit} />}
-              cursor={{ stroke: 'rgba(255,255,255,0.15)', strokeWidth: 1 }}
+              cursor={ct.cursor ?? { stroke: 'rgba(148,163,184,0.4)', strokeWidth: 1 }}
             />
-            <ReferenceLine y={firstClose} stroke="rgba(255,255,255,0.1)" strokeDasharray="4 4" />
+            <ReferenceLine y={firstClose} stroke={ct.refLine} strokeDasharray="4 4" />
             <Area
               type="monotone"
               dataKey="close"

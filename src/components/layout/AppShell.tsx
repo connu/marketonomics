@@ -4,10 +4,17 @@ import React from 'react'
 import { Box } from '@mui/material'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useDesignMode } from '../../app/ThemeRegistry'
+import type { DesignMode } from '../../theme/tokens'
 
 const NAV_ITEMS = [
   { label: 'Relationship Explorer', href: '/economics' },
   { label: 'Comparative Analysis', href: '/analytics' },
+]
+
+const MODE_OPTIONS: { value: DesignMode; label: string }[] = [
+  { value: 'classic', label: 'Classic' },
+  { value: 'tradingview', label: 'TradingView' },
 ]
 
 interface AppShellProps {
@@ -16,6 +23,7 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname()
+  const { mode, setMode, tokens: t } = useDesignMode()
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
@@ -34,14 +42,14 @@ export function AppShell({ children }: AppShellProps) {
           position: 'sticky',
           top: 0,
           zIndex: 100,
-          boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+          boxShadow: t.navShadow,
         }}
       >
         {/* Brand */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <Box
             sx={{
-              width: 28, height: 28, bgcolor: '#0f172a', borderRadius: '7px',
+              width: 28, height: 28, bgcolor: t.brandBg, borderRadius: '7px',
               display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
             }}
           >
@@ -49,14 +57,14 @@ export function AppShell({ children }: AppShellProps) {
               <polyline points="1,11 4,7 7,9 10,4 14,6" stroke="white" strokeWidth="1.7" fill="none" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </Box>
-          <Box component="span" sx={{ fontSize: 14, fontWeight: 700, color: '#0f172a', letterSpacing: '-0.4px' }}>
+          <Box component="span" sx={{ fontSize: 14, fontWeight: 700, color: t.textStrong, letterSpacing: '-0.4px' }}>
             QuantView
           </Box>
           <Box
             component="span"
             sx={{
               fontSize: 10, fontWeight: 600, color: 'text.disabled', px: 0.75, py: '1px',
-              bgcolor: '#f1f5f9', borderRadius: '4px', letterSpacing: '0.4px', textTransform: 'uppercase',
+              bgcolor: t.navPillBg, borderRadius: '4px', letterSpacing: '0.4px', textTransform: 'uppercase',
               display: { xs: 'none', sm: 'inline' },
             }}
           >
@@ -65,7 +73,7 @@ export function AppShell({ children }: AppShellProps) {
         </Box>
 
         {/* Page tabs */}
-        <Box sx={{ display: 'flex', bgcolor: '#f1f5f9', borderRadius: '10px', p: '3px', gap: '2px' }}>
+        <Box sx={{ display: 'flex', bgcolor: t.navPillBg, borderRadius: '10px', p: '3px', gap: '2px' }}>
           {NAV_ITEMS.map(({ label, href }) => {
             const active = pathname.startsWith(href)
             return (
@@ -76,9 +84,9 @@ export function AppShell({ children }: AppShellProps) {
                 sx={{
                   px: 1.6, py: 0.6, borderRadius: '7px', fontSize: 12, fontWeight: 500,
                   cursor: 'pointer', textDecoration: 'none', transition: 'all 0.2s',
-                  color: active ? '#0f172a' : '#64748b',
-                  bgcolor: active ? '#fff' : 'transparent',
-                  boxShadow: active ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                  color: active ? t.activeTabText : t.inactiveTabText,
+                  bgcolor: active ? t.activeTabBg : 'transparent',
+                  boxShadow: active ? t.tabShadow : 'none',
                   whiteSpace: 'nowrap',
                 }}
               >
@@ -88,11 +96,37 @@ export function AppShell({ children }: AppShellProps) {
           })}
         </Box>
 
-        {/* Live status */}
-        <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
-          <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: '#22c55e', boxShadow: '0 0 0 2px #bbf7d0' }} />
-          <Box component="span" sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500 }}>
-            Live · 2004–2025
+        {/* Design mode toggle + live status */}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', bgcolor: t.navPillBg, borderRadius: '8px', p: '2px', gap: '2px' }}>
+            {MODE_OPTIONS.map(({ value, label }) => {
+              const active = mode === value
+              return (
+                <Box
+                  key={value}
+                  component="button"
+                  onClick={() => setMode(value)}
+                  aria-pressed={active}
+                  title={`Switch to the ${label} design`}
+                  sx={{
+                    border: 'none', fontFamily: 'inherit', px: 1.1, py: 0.55, borderRadius: '6px',
+                    fontSize: 10.5, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s',
+                    letterSpacing: '0.2px', whiteSpace: 'nowrap',
+                    color: active ? t.activeTabText : t.inactiveTabText,
+                    bgcolor: active ? t.activeTabBg : 'transparent',
+                    boxShadow: active ? t.tabShadow : 'none',
+                  }}
+                >
+                  {label}
+                </Box>
+              )
+            })}
+          </Box>
+          <Box sx={{ display: { xs: 'none', md: 'flex' }, alignItems: 'center', gap: 1 }}>
+            <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: t.liveDot, boxShadow: `0 0 0 2px ${t.liveRing}` }} />
+            <Box component="span" sx={{ fontSize: 11, color: 'text.disabled', fontWeight: 500 }}>
+              Live · 2004–2025
+            </Box>
           </Box>
         </Box>
       </Box>

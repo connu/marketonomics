@@ -41,37 +41,51 @@ export function useIndicators(): UseIndicatorsReturn {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    const data = await fetchAllQuotes()
+  const applyQuotes = useCallback((data: Record<string, IndicatorQuote>) => {
     setQuotes(data)
     setLastUpdated(new Date())
     setLoading(false)
   }, [])
 
+  // `loading` starts true and only manual refresh() re-arms it, so the 60s
+  // interval updates prices without flashing the loading state.
+  const refresh = useCallback(() => {
+    setLoading(true)
+    void fetchAllQuotes().then(applyQuotes)
+  }, [applyQuotes])
+
   useEffect(() => {
-    refresh()
-    intervalRef.current = setInterval(refresh, 60_000)
+    const tick = () => void fetchAllQuotes().then(applyQuotes)
+    tick()
+    intervalRef.current = setInterval(tick, 60_000)
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
-  }, [refresh])
+  }, [applyQuotes])
 
   return { quotes, loading, lastUpdated, refresh }
 }
 
 export function useIndicatorHistory(symbol: string, range: string) {
-  const [history, setHistory] = useState<HistoryPoint[]>([])
-  const [loading, setLoading] = useState(false)
+  // `loading` is derived (fetched key lags the requested one) instead of being
+  // reset inside the effect; previous points stay visible while the next
+  // range loads, matching the prior behavior.
+  const [result, setResult] = useState<{ key: string; points: HistoryPoint[] }>({
+    key: '',
+    points: [],
+  })
 
   useEffect(() => {
     if (!symbol) return
-    setLoading(true)
+    let cancelled = false
     fetchHistory(symbol, range).then((pts) => {
-      setHistory(pts)
-      setLoading(false)
+      if (!cancelled) setResult({ key: `${symbol}|${range}`, points: pts })
     })
+    return () => {
+      cancelled = true
+    }
   }, [symbol, range])
 
-  return { history, loading }
+  const loading = Boolean(symbol) && result.key !== `${symbol}|${range}`
+  return { history: result.points, loading }
 }

@@ -4,4 +4,14 @@
 
 body {
   margin: 0;
+  /* Classic (light) design mode — default */
+  background-color: #f1f5f9;
+}
+
+/* TradingView (dark) design mode — the attribute is set by a pre-hydration
+   inline script in layout.tsx, so the background is correct before first paint. */
+html[data-design-mode='tradingview'] body {
+  background-color: #131722;
+  color: #d1d4dc;
+  color-scheme: dark;
 }

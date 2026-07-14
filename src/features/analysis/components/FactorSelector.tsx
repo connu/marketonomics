@@ -3,7 +3,7 @@
 import React from 'react'
 import { Box, Typography, Chip } from '@mui/material'
 import { getAllFactors, CATEGORY_ORDER, CATEGORY_LABELS } from '../lib/normalize'
-import { FACTOR_COLORS } from './FactorOverlayChart'
+import { useDesignMode } from '../../../app/ThemeRegistry'
 
 interface FactorSelectorProps {
   selected: string[]
@@ -20,6 +20,7 @@ const CATEGORY_CHIP_COLORS: Record<string, string> = {
 }
 
 export function FactorSelector({ selected, onToggle }: FactorSelectorProps) {
+  const { tokens } = useDesignMode()
   const allFactors = getAllFactors()
   const byCategory = Object.fromEntries(
     CATEGORY_ORDER.map(cat => [cat, allFactors.filter(f => f.category === cat)])
@@ -51,7 +52,7 @@ export function FactorSelector({ selected, onToggle }: FactorSelectorProps) {
               {factors.map(factor => {
                 const isSelected = selected.includes(factor.id)
                 const selIdx = selected.indexOf(factor.id)
-                const color = isSelected ? FACTOR_COLORS[selIdx % FACTOR_COLORS.length] : undefined
+                const color = isSelected ? tokens.overlayFactorColors[selIdx % tokens.overlayFactorColors.length] : undefined
                 return (
                   <Chip
                     key={factor.id}

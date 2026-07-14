@@ -8,6 +8,8 @@ import {
   linearRegression, rollingCorrelation, grangerCausality,
   cointegrationTest, monteCarlo, elasticityAnalysis, mutualInformation,
 } from '../lib/math'
+import { useDesignMode } from '../../../app/ThemeRegistry'
+import type { DesignTokens } from '../../../theme/tokens'
 
 interface Bar { label: string; val: string; pct: string; color: string }
 interface StatCard {
@@ -18,10 +20,12 @@ interface StatCard {
   bars: Bar[]
 }
 
-const POS = '#16a34a'
-const NEG = '#dc2626'
-const NEU = '#64748b'
-const BLUE = '#2563eb'
+// Stat colors per design mode (classic: green/red/slate/blue · TradingView: teal/red).
+interface StatColors { pos: string; neg: string; neu: string; blue: string }
+
+function statColors(tokens: DesignTokens): StatColors {
+  return { pos: tokens.pos, neg: tokens.neg, neu: tokens.neutral, blue: tokens.accent }
+}
 
 function firstSentence(text: string): string {
   const i = text.indexOf('. ')
@@ -29,7 +33,7 @@ function firstSentence(text: string): string {
 }
 
 // Build the "rolling window breakdown" mini-bars from a real rolling correlation series.
-function rollingBars(x: number[], y: number[], years: number[]): Bar[] {
+function rollingBars(x: number[], y: number[], years: number[], c: StatColors): Bar[] {
   const window = Math.min(5, Math.max(3, Math.floor(x.length / 2)))
   const roll = rollingCorrelation(x, y, years, window)
   const valid = roll.correlations
@@ -40,12 +44,13 @@ function rollingBars(x: number[], y: number[], years: number[]): Bar[] {
     label: `'${String(d.year).slice(2)}`,
     val: d.r.toFixed(2),
     pct: `${Math.min(Math.max(Math.abs(d.r) * 80 + 12, 6), 96)}%`,
-    color: d.r > 0 ? BLUE : NEG,
+    color: d.r > 0 ? c.blue : c.neg,
   }))
 }
 
-function computeCards(x: number[], y: number[], years: number[], factorLabel: string, symbol: string): StatCard[] {
-  const bars = rollingBars(x, y, years)
+function computeCards(x: number[], y: number[], years: number[], factorLabel: string, symbol: string, c: StatColors): StatCard[] {
+  const { pos: POS, neg: NEG, neu: NEU, blue: BLUE } = c
+  const bars = rollingBars(x, y, years, c)
   const pear = pearsonCorrelation(x, y)
   const spear = spearmanCorrelation(x, y)
   const xcorr = crossCorrelation(x, y, Math.min(5, Math.floor(x.length / 3)))
@@ -75,14 +80,15 @@ function computeCards(x: number[], y: number[], years: number[], factorLabel: st
 }
 
 function CardView({ card }: { card: StatCard }) {
+  const { tokens } = useDesignMode()
   const [open, setOpen] = useState(false)
   return (
     <Box
       sx={{
         bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider',
-        borderRadius: '12px', p: '16px 18px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        borderRadius: '12px', p: '16px 18px', boxShadow: tokens.cardShadow,
         transition: 'box-shadow 0.2s, transform 0.2s',
-        '&:hover': { boxShadow: '0 4px 16px rgba(0,0,0,0.09)', transform: 'translateY(-1px)' },
+        '&:hover': { boxShadow: tokens.cardShadowHover, transform: 'translateY(-1px)' },
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 1 }}>
@@ -104,7 +110,7 @@ function CardView({ card }: { card: StatCard }) {
         {card.explanation}
       </Typography>
       <Collapse in={open}>
-        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: '#f1f5f9' }}>
+        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: '1px solid', borderColor: tokens.hairline }}>
           <Typography sx={{ fontSize: 10, fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 1 }}>
             Rolling Window Breakdown
           </Typography>
@@ -114,10 +120,10 @@ function CardView({ card }: { card: StatCard }) {
           {card.bars.map((b, i) => (
             <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.6 }}>
               <Typography sx={{ fontSize: 10, color: 'text.disabled', width: 24, flexShrink: 0 }}>{b.label}</Typography>
-              <Box sx={{ flex: 1, bgcolor: '#f1f5f9', borderRadius: '3px', height: 5, overflow: 'hidden' }}>
+              <Box sx={{ flex: 1, bgcolor: tokens.trackBg, borderRadius: '3px', height: 5, overflow: 'hidden' }}>
                 <Box sx={{ height: '100%', width: b.pct, bgcolor: b.color, borderRadius: '3px' }} />
               </Box>
-              <Typography sx={{ fontSize: 10, fontWeight: 600, color: '#374151', width: 38, textAlign: 'right' }}>{b.val}</Typography>
+              <Typography sx={{ fontSize: 10, fontWeight: 600, color: tokens.textBody, width: 38, textAlign: 'right' }}>{b.val}</Typography>
             </Box>
           ))}
         </Box>
@@ -136,13 +142,14 @@ interface StatCardGridProps {
 }
 
 export function StatCardGrid({ stockPrices, factorValues, years, factorId, symbol, rangeLabel }: StatCardGridProps) {
+  const { tokens } = useDesignMode()
   const meta = getFactorMeta(factorId)
   const factorLabel = meta?.label ?? factorId
   const cards = useMemo(() => {
     const x = factorValues.filter(v => !isNaN(v) && isFinite(v))
     if (x.length < 4 || stockPrices.length < 4) return []
-    return computeCards(factorValues, stockPrices, years, factorLabel, symbol)
-  }, [factorValues, stockPrices, years, factorLabel, symbol])
+    return computeCards(factorValues, stockPrices, years, factorLabel, symbol, statColors(tokens))
+  }, [factorValues, stockPrices, years, factorLabel, symbol, tokens])
 
   if (!cards.length) return null
 
@@ -150,7 +157,7 @@ export function StatCardGrid({ stockPrices, factorValues, years, factorId, symbo
     <Box sx={{ mb: 2.5 }}>
       <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25, mb: 1.75, flexWrap: 'wrap' }}>
         <Typography sx={{ fontSize: 15, fontWeight: 700 }}>Statistical Analysis</Typography>
-        <Box sx={{ fontSize: 11, color: 'primary.main', px: 1, py: '2px', bgcolor: '#eff6ff', borderRadius: '5px', fontWeight: 500 }}>
+        <Box sx={{ fontSize: 11, color: 'primary.main', px: 1, py: '2px', bgcolor: tokens.accentBg, borderRadius: '5px', fontWeight: 500 }}>
           {symbol} vs {factorLabel}
         </Box>
         <Typography sx={{ fontSize: 11, color: 'text.disabled', ml: 'auto' }}>{rangeLabel} · annual data</Typography>
