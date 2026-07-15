@@ -1,21 +1,45 @@
 'use client'
 
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { Suspense, useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   Box, Typography, Stack, Autocomplete, TextField,
   Button, CircularProgress, Alert, ToggleButton, ToggleButtonGroup,
+  IconButton, Tooltip,
 } from '@mui/material'
+import { useTheme } from '@mui/material/styles'
+import DownloadIcon from '@mui/icons-material/Download'
+import ImageIcon from '@mui/icons-material/Image'
 import SearchIcon from '@mui/icons-material/Search'
 import ShowChartIcon from '@mui/icons-material/ShowChart'
+import dynamic from 'next/dynamic'
+import { useSearchParams } from 'next/navigation'
+import { Skeleton } from '@mui/material'
 import { searchTickers } from '../../../services/marketData'
 import type { SearchResult } from '../../../services/marketData'
 import { useFactorAnalysis } from '../../../features/analysis/hooks/useFactorAnalysis'
-import { FactorOverlayChart } from '../../../features/analysis/components/FactorOverlayChart'
 import { useDesignMode } from '../../ThemeRegistry'
 import { FactorSelector } from '../../../features/analysis/components/FactorSelector'
-import { StatCardGrid } from '../../../features/analysis/components/StatCardGrid'
 import { ResearchSummary } from '../../../features/analysis/components/ResearchSummary'
 import { getFactorMeta } from '../../../features/analysis/lib/normalize'
+import { writeUrlParams } from '../../../utils/urlState'
+import { downloadCsv } from '../../../utils/exportCsv'
+import { exportChartPng } from '../../../utils/exportChart'
+import { CopyLinkButton } from '../../../components/CopyLinkButton'
+
+// Chart + stat components pull in recharts and the stats suite; load them as
+// async chunks so the initial route bundle stays light.
+const FactorOverlayChart = dynamic(
+  () => import('../../../features/analysis/components/FactorOverlayChart').then(m => m.FactorOverlayChart),
+  { ssr: false, loading: () => <Skeleton variant="rounded" height={420} sx={{ borderRadius: '14px' }} /> }
+)
+const StatCardGrid = dynamic(
+  () => import('../../../features/analysis/components/StatCardGrid').then(m => m.StatCardGrid),
+  { ssr: false }
+)
+const NewsFeed = dynamic(
+  () => import('../../../features/news/components/NewsFeed').then(m => m.NewsFeed),
+  { ssr: false }
+)
 
 const YEAR_RANGES = [5, 10, 15, 20] as const
 
@@ -33,21 +57,80 @@ function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
   )
 }
 
-export default function EconomicsPage() {
+function EconomicsContent() {
   const { tokens } = useDesignMode()
-  const { state, setState, loadStock, realign, toggleFactor } = useFactorAnalysis()
+  const theme = useTheme()
+  const searchParams = useSearchParams()
+
+  // Shared analyses arrive as ?symbol=AAPL&factors=gold,interest_rate&range=10.
+  // useSearchParams resolves at render, so the factors/range seed initial state
+  // directly and only the price fetch needs an effect.
+  const urlState = useMemo(() => {
+    const factors = (searchParams.get('factors')?.split(',') ?? []).filter(f => getFactorMeta(f))
+    const rangeParam = Number(searchParams.get('range'))
+    return {
+      symbol: searchParams.get('symbol')?.trim().toUpperCase() || null,
+      factors,
+      yearRange: (YEAR_RANGES as readonly number[]).includes(rangeParam) ? rangeParam : 10,
+    }
+  // Only the values present on first render seed the page; later edits own the URL.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const { state, setState, loadStock, realign, toggleFactor } = useFactorAnalysis({
+    selectedFactors: urlState.factors,
+    yearRange: urlState.yearRange,
+  })
   const [inputValue, setInputValue] = useState('')
   const [options, setOptions] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
   const [selected, setSelected] = useState<SearchResult | null>(null)
+  const chartRef = useRef<HTMLDivElement>(null)
+
+  // Fetch the shared symbol's history on mount
+  useEffect(() => {
+    if (urlState.symbol) {
+      loadStock(urlState.symbol, urlState.symbol, urlState.yearRange, urlState.factors)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Keep the URL shareable as the analysis changes
+  useEffect(() => {
+    const active = state.symbol || state.selectedFactors.length
+    writeUrlParams({
+      symbol: state.symbol || null,
+      factors: state.selectedFactors.join(',') || null,
+      range: active ? String(state.yearRange) : null,
+    })
+  }, [state.symbol, state.selectedFactors, state.yearRange])
+
+  const exportAlignedCsv = useCallback(() => {
+    const aligned = state.aligned
+    if (!aligned || !state.symbol) return
+    downloadCsv(
+      `${state.symbol}-factor-analysis.csv`,
+      ['year', state.symbol, ...state.selectedFactors],
+      aligned.years.map((y, i) => [
+        y,
+        aligned.stockPrices[i],
+        ...state.selectedFactors.map(f => aligned.factorValues[f]?.[i] ?? ''),
+      ])
+    )
+  }, [state.aligned, state.symbol, state.selectedFactors])
 
   const handleSearch = useCallback(async (query: string) => {
     setInputValue(query)
     if (query.length < 1) { setOptions([]); return }
     setSearching(true)
-    const results = await searchTickers(query)
-    setOptions(results)
-    setSearching(false)
+    try {
+      const results = await searchTickers(query)
+      setOptions(results)
+    } catch {
+      setOptions([])
+    } finally {
+      setSearching(false)
+    }
   }, [])
 
   const handleLoad = useCallback(() => {
@@ -173,7 +256,16 @@ export default function EconomicsPage() {
             >
               <Box sx={{ width: 7, height: 7, borderRadius: '50%', bgcolor: color }} />
               <span>{meta?.label ?? fid}</span>
-              <Box component="span" onClick={() => toggleFactor(fid)} sx={{ ml: 0.25, opacity: 0.55, fontSize: 10, cursor: 'pointer', lineHeight: 1, '&:hover': { opacity: 1 } }}>✕</Box>
+              <Box
+                component="button"
+                onClick={() => toggleFactor(fid)}
+                aria-label={`Remove ${meta?.label ?? fid} overlay`}
+                sx={{
+                  ml: 0.25, opacity: 0.55, fontSize: 10, cursor: 'pointer', lineHeight: 1,
+                  background: 'none', border: 'none', p: 0, color: 'inherit', fontFamily: 'inherit',
+                  '&:hover': { opacity: 1 }, '&:focus-visible': { opacity: 1 },
+                }}
+              >✕</Box>
             </Box>
           )
         })}
@@ -193,12 +285,32 @@ export default function EconomicsPage() {
               {state.symbol}
             </Typography>
             <Typography variant="caption" color="text.secondary">{state.companyName}</Typography>
+            <Stack direction="row" sx={{ ml: 'auto', gap: 0.75 }}>
+              <CopyLinkButton />
+              <Tooltip title="Download aligned data (CSV)">
+                <IconButton size="small" onClick={exportAlignedCsv} aria-label="Download aligned data as CSV" sx={{ border: '1px solid', borderColor: 'divider' }}>
+                  <DownloadIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Export chart (PNG)">
+                <IconButton
+                  size="small"
+                  onClick={() => void exportChartPng(chartRef.current, `${state.symbol}-chart.png`, theme.palette.background.paper)}
+                  aria-label="Export chart as PNG"
+                  sx={{ border: '1px solid', borderColor: 'divider' }}
+                >
+                  <ImageIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              </Tooltip>
+            </Stack>
           </Stack>
-          <FactorOverlayChart
-            series={state.chartSeries}
-            symbol={state.symbol}
-            selectedFactors={state.selectedFactors}
-          />
+          <Box ref={chartRef}>
+            <FactorOverlayChart
+              series={state.chartSeries}
+              symbol={state.symbol}
+              selectedFactors={state.selectedFactors}
+            />
+          </Box>
         </Box>
       ) : !state.loading && (
         <Panel sx={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2.5 }}>
@@ -233,10 +345,26 @@ export default function EconomicsPage() {
         </Box>
       )}
 
+      {/* Latest headlines for the loaded ticker */}
+      {state.chartSeries && state.symbol && (
+        <Box sx={{ mb: 2.5 }}>
+          <NewsFeed symbol={state.symbol} />
+        </Box>
+      )}
+
       {/* Factor selector */}
       <Panel sx={{ p: 2.5 }}>
         <FactorSelector selected={state.selectedFactors} onToggle={toggleFactor} />
       </Panel>
     </Box>
+  )
+}
+
+export default function EconomicsPage() {
+  // useSearchParams requires a Suspense boundary for the prerender pass.
+  return (
+    <Suspense fallback={<Skeleton variant="rounded" height={480} sx={{ borderRadius: '14px' }} />}>
+      <EconomicsContent />
+    </Suspense>
   )
 }

@@ -13,6 +13,9 @@ export interface HistoryPoint {
 const VALID_RANGES = ['1mo', '3mo', '6mo', '1y', '2y', '5y', '10y', 'max'] as const
 type Range = (typeof VALID_RANGES)[number]
 
+const VALID_INTERVALS = ['1d', '1wk', '1mo'] as const
+type Interval = (typeof VALID_INTERVALS)[number]
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ symbol: string }> }
@@ -23,7 +26,17 @@ export async function GET(
     ? (rangeParam as Range)
     : '1y'
 
-  const interval = range === '1mo' ? '1d' : range === '3mo' ? '1d' : range === 'max' ? '1mo' : '1wk'
+  // Interval defaults follow the range; an explicit ?interval= overrides it,
+  // except daily bars on 10y+/max ranges (huge, unreliable Yahoo payloads).
+  let interval: Interval = range === '1mo' ? '1d' : range === '3mo' ? '1d' : range === 'max' ? '1mo' : '1wk'
+  const intervalParam = req.nextUrl.searchParams.get('interval')
+  if (
+    intervalParam &&
+    VALID_INTERVALS.includes(intervalParam as Interval) &&
+    !(intervalParam === '1d' && (range === '10y' || range === 'max'))
+  ) {
+    interval = intervalParam as Interval
+  }
 
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}` +

@@ -10,6 +10,8 @@ import type { DesignMode } from '../../theme/tokens'
 const NAV_ITEMS = [
   { label: 'Relationship Explorer', href: '/economics' },
   { label: 'Comparative Analysis', href: '/analytics' },
+  { label: 'Live Macro', href: '/macro' },
+  { label: 'Strategy Lab', href: '/lab' },
 ]
 
 const MODE_OPTIONS: { value: DesignMode; label: string }[] = [
@@ -73,7 +75,7 @@ export function AppShell({ children }: AppShellProps) {
         </Box>
 
         {/* Page tabs */}
-        <Box sx={{ display: 'flex', bgcolor: t.navPillBg, borderRadius: '10px', p: '3px', gap: '2px' }}>
+        <Box sx={{ display: 'flex', bgcolor: t.navPillBg, borderRadius: '10px', p: '3px', gap: '2px', overflowX: 'auto', maxWidth: { xs: '55vw', md: 'none' }, mx: 1 }}>
           {NAV_ITEMS.map(({ label, href }) => {
             const active = pathname.startsWith(href)
             return (

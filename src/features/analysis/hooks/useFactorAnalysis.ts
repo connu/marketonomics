@@ -65,8 +65,9 @@ const INITIAL: AnalysisState = {
   results: {},
 }
 
-export function useFactorAnalysis() {
-  const [state, setState] = useState<AnalysisState>(INITIAL)
+/** `initial` seeds state on first render (e.g. from shareable URL params). */
+export function useFactorAnalysis(initial?: Partial<Pick<AnalysisState, 'selectedFactors' | 'yearRange'>>) {
+  const [state, setState] = useState<AnalysisState>(() => ({ ...INITIAL, ...initial }))
 
   // Only called once when user clicks "Load Chart" — fetches and caches yearly prices
   const loadStock = useCallback(async (symbol: string, name: string, yearRange: number, selectedFactors: string[]) => {

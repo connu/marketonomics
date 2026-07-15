@@ -23,10 +23,13 @@ QuantLab performs analysis on stocks by correlating stock performance with macro
 ### Key Features
 
 - **Economic Factor Analysis** — Overlay 20 years of macro data (inflation, unemployment, GDP, interest rates, etc.) on any stock
-- **10 Statistical Methods** — From basic correlation to advanced causal inference
-- **Privacy First** — Client-side computation. No backend, no tracking, no data transmission
-- **Portfolio Management** — Track holdings, import/export via JSON
-- **Real Market Data** — Live data from Yahoo Finance
+- **10 Statistical Methods** — From basic correlation to advanced causal inference, computed in a Web Worker so the UI never blocks
+- **Strategy Lab** — Backtest rules (SMA crossover, price-vs-SMA, buy & hold) against real price history, optionally gated on live macro conditions. Equity curve vs benchmark, CAGR / max drawdown / Sharpe / win rate, and a Monte Carlo projection
+- **Live Macro** — Monthly US macro series straight from FRED (CPI, Fed Funds, unemployment, yield curve, M2, and more), plus live market quotes and a persistent watchlist
+- **Comparative Analysis** — Correlate any mix of static factors, live stocks, and live FRED series in one matrix
+- **Shareable & Exportable** — Analyses encode into the URL; export data as CSV and charts as PNG
+- **Free Data Only** — Yahoo Finance and FRED, both keyless. No API keys, no paid tiers, no billing
+- **Privacy First** — All analysis math runs client-side. No accounts, no tracking
 - **No Installation** — Runs entirely in the browser
 
 ---

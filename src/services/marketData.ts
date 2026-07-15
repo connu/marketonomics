@@ -20,9 +20,11 @@ export async function fetchQuote(symbol: string): Promise<QuoteData | null> {
 
 export async function fetchHistory(
   symbol: string,
-  range = '1y'
+  range = '1y',
+  interval?: '1d' | '1wk' | '1mo'
 ): Promise<HistoryPoint[]> {
-  const res = await fetch(`/api/history/${encodeURIComponent(symbol)}?range=${range}`)
+  const qs = `range=${range}` + (interval ? `&interval=${interval}` : '')
+  const res = await fetch(`/api/history/${encodeURIComponent(symbol)}?${qs}`)
   if (!res.ok) return []
   const data = await res.json()
   return data.points ?? []

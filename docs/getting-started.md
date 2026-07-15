@@ -22,9 +22,24 @@ npm start          # serve the production build
 npm run lint       # ESLint
 ```
 
-Opening `http://localhost:3000` redirects you to `/economics`, the Relationship Explorer. The top navigation switches between the app's two tabs. A chart-design toggle lets you switch between the classic light design and a TradingView-inspired dark mode.
+Opening `http://localhost:3000` redirects you to `/economics`, the Relationship Explorer. The top navigation switches between the app's four tabs: **Relationship Explorer**, **Comparative Analysis**, **Live Macro**, and **Strategy Lab**. A chart-design toggle lets you switch between the classic light design and a TradingView-inspired dark mode.
 
-> **Note:** the app fetches live data from Yahoo Finance through its own API routes, so you need an internet connection. If Yahoo's unofficial API is down or rate-limiting, stock search and loading will fail (see [Limitations](limitations.md)).
+> **Note:** the app fetches live data from Yahoo Finance and FRED through its own API routes, so you need an internet connection. If Yahoo's unofficial API is down or rate-limiting, stock search and loading will fail (see [Limitations](limitations.md)).
+
+## API keys
+
+**None required.** Every data source is free and keyless — Yahoo Finance for prices/news, FRED for macro series. `npm install && npm run dev` is the whole setup.
+
+Optionally, you can add a **free** FRED API key to make the macro routes use FRED's official JSON API instead of its public CSV export (more stable, explicit rate limits). The app behaves identically either way:
+
+1. Get a free key at <https://fredaccount.stlouisfed.org/apikeys> (instant, no card).
+2. Create `.env.local` in the project root:
+   ```
+   FRED_API_KEY=your_key_here
+   ```
+3. Restart the dev server.
+
+See [Data Sources](data-sources.md) for details.
 
 ---
 
@@ -78,6 +93,33 @@ This tab compares series against each other over the full 2004–2025 annual dat
 - **Synchronized Time Series** — a grid of mini-charts, one per selected series. Hovering one chart cross-highlights the same year in all of them. Remove a series with the × that appears on hover; add more with **Add Graph**. Six factors are preselected (S&P 500, AI investment, Fed funds rate, CPI inflation, WTI oil, gold). You can also add stock tickers as comparison series alongside the bundled factors.
 - **Relationship Matrix** — a Pearson correlation heat map across all selected series. Blue = positive, red = negative.
 - **Pairwise detail drawer** — click any off-diagonal cell to open a side panel with: Pearson r and R², a scatter plot with the OLS regression line, cross-correlation at lags −2 to +2 years, and a short written interpretation. Note that this interpretation is also template text keyed off the size of r, not a bespoke statistical report.
+
+Series come in three kinds, all mixable in the same matrix: bundled **factors**, live **stocks** (`stock:AAPL`), and live **FRED macro** series (`macro:CPIAUCSL`, annualized — level series like CPI and M2 are added as year-over-year %). Your selection is encoded in the URL, so **Copy link** shares the exact comparison, and the download button exports every series as CSV.
+
+---
+
+## Tab 3: Live Macro (`/macro`)
+
+Live US macroeconomic data pulled straight from FRED, at monthly (or better) frequency rather than the annual `factors.json` data.
+
+- **Macro explorer** — pick any of 14 series across Inflation, Interest Rates, Labor Market, Money Supply, Economic Activity, and Housing. Toggle **Level** vs **YoY %** where it's meaningful (CPI, M2, payrolls…), and a range from 1Y to Max (decades of history — Fed Funds goes back to 1954).
+- **Live Markets** — index, commodity, currency, and crypto quotes, auto-refreshed every 60 seconds. Polling pauses while the tab is hidden and catches up when you return.
+- **Watchlist** — search and pin up to 20 symbols. Each row shows a live quote, day change, and a 3-month sparkline. Persists in localStorage across reloads.
+
+## Tab 4: Strategy Lab (`/lab`)
+
+Backtest simple rules against real price history. Everything runs in your browser.
+
+1. **Pick a ticker**, a range (5y / 10y / Max) and a bar size (weekly or monthly).
+2. **Pick a strategy:** Buy & Hold, SMA Crossover (hold while the fast SMA is above the slow one), or Price Above SMA.
+3. **Optionally add macro filters** — e.g. *hold only while Fed Funds Rate is falling*. Filters are ANDed with the entry rule and resolved against live FRED data, forward-filled to each bar.
+4. **Run Backtest.**
+
+You get an equity curve against a buy-and-hold benchmark (with shaded in-market bands), stat tiles (total return, CAGR, max drawdown, Sharpe, win rate, exposure), a trades table, and a Monte Carlo projection sampled from the strategy's own return distribution.
+
+**How the engine avoids cheating:** a signal computed on bar *t* is applied to the *t → t+1* return — the position is taken at the close of the bar that generated the signal, never before. This is the standard guard against lookahead bias.
+
+**What it does not model:** transaction costs, slippage, taxes, or dividends (Yahoo's `close` is split-adjusted but not dividend-adjusted, so total return is understated). Fills are at bar close. Treat results as educational, not as evidence a strategy works — and see [Limitations](limitations.md).
 
 ---
 

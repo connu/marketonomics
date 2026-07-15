@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { INDICATORS, IndicatorQuote } from '../types/indicator'
 import { fetchQuote, fetchHistory, HistoryPoint } from '../../../services/marketData'
+import { useVisiblePolling } from '../../../utils/useVisiblePolling'
 
 export interface UseIndicatorsReturn {
   quotes: Record<string, IndicatorQuote>
@@ -39,7 +40,6 @@ export function useIndicators(): UseIndicatorsReturn {
   const [quotes, setQuotes] = useState<Record<string, IndicatorQuote>>({})
   const [loading, setLoading] = useState(true)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const applyQuotes = useCallback((data: Record<string, IndicatorQuote>) => {
     setQuotes(data)
@@ -54,14 +54,12 @@ export function useIndicators(): UseIndicatorsReturn {
     void fetchAllQuotes().then(applyQuotes)
   }, [applyQuotes])
 
-  useEffect(() => {
-    const tick = () => void fetchAllQuotes().then(applyQuotes)
-    tick()
-    intervalRef.current = setInterval(tick, 60_000)
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current)
-    }
-  }, [applyQuotes])
+  // 60s polling that pauses while the tab is hidden (no wasted requests) and
+  // refreshes immediately when it becomes visible again.
+  useVisiblePolling(
+    useCallback(() => void fetchAllQuotes().then(applyQuotes), [applyQuotes]),
+    60_000
+  )
 
   return { quotes, loading, lastUpdated, refresh }
 }

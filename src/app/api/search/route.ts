@@ -18,10 +18,20 @@ export async function GET(req: NextRequest) {
     `https://query1.finance.yahoo.com/v1/finance/search` +
     `?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0&listsCount=0`
 
-  const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-    next: { revalidate: 0 },
-  })
+  // Yahoo's search endpoint intermittently throttles with a transient 4xx/5xx.
+  // Ticker matches for a query are stable, so cache briefly (this also collapses
+  // the bursts a debounced search box produces) and retry once on a blip.
+  const request = () =>
+    fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      next: { revalidate: 300 },
+    })
+
+  let res = await request()
+  if (!res.ok) {
+    await new Promise(resolve => setTimeout(resolve, 250))
+    res = await request()
+  }
 
   if (!res.ok) {
     return NextResponse.json({ error: 'Search failed' }, { status: res.status })

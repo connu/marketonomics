@@ -1,59 +1,53 @@
 'use client'
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Box, Typography, Stack, Menu, MenuItem, IconButton, TextField,
-  CircularProgress, Divider, ListSubheader,
+  Box, Typography, Stack, Menu, MenuItem, TextField,
+  CircularProgress, Divider, ListSubheader, Skeleton, IconButton, Tooltip,
 } from '@mui/material'
 import AddIcon from '@mui/icons-material/Add'
-import CloseIcon from '@mui/icons-material/Close'
-import {
-  ResponsiveContainer, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip,
-  ComposedChart, Scatter,
-} from 'recharts'
+import DownloadIcon from '@mui/icons-material/Download'
+import dynamic from 'next/dynamic'
+import { useSearchParams } from 'next/navigation'
 import { getAllFactors, getFactorMeta, FACTOR_YEARS, toYearlyPrices, toFactorYearValues } from '../../../features/analysis/lib/normalize'
-import { pearsonCorrelation, crossCorrelation, linearRegression } from '../../../features/analysis/lib/math'
+import { pearsonCorrelation } from '../../../features/analysis/lib/math'
+import { finitePairs, type SeriesInfo } from '../../../features/analysis/lib/series'
 import { searchTickers, fetchHistory, type SearchResult } from '../../../services/marketData'
+import { fetchMacroSeries } from '../../../services/macroData'
+import { toYoY, toAnnual } from '../../../features/macro/lib/transform'
+import { MACRO_SERIES, getMacroDef, type MacroSeriesDef } from '../../../features/macro/catalog'
 import { useDesignMode } from '../../ThemeRegistry'
+import type { DrawerData } from '../../../features/analysis/components/DetailDrawer'
+import { writeUrlParams } from '../../../utils/urlState'
+import { downloadCsv } from '../../../utils/exportCsv'
+import { CopyLinkButton } from '../../../components/CopyLinkButton'
+
+// Chart-heavy components load as async chunks so recharts stays out of the
+// route's initial bundle.
+const MiniChart = dynamic(
+  () => import('../../../features/analysis/components/MiniChart').then(m => m.MiniChart),
+  { ssr: false, loading: () => <Skeleton variant="rounded" height={142} sx={{ borderRadius: '10px' }} /> }
+)
+const DetailDrawer = dynamic(
+  () => import('../../../features/analysis/components/DetailDrawer').then(m => m.DetailDrawer),
+  { ssr: false }
+)
 
 // Default series mirror the design (equity + AI + rates + inflation + oil + gold),
 // mapped onto the app's real factor dataset.
 const DEFAULT_SERIES = ['sp500', 'ai_investment', 'interest_rate', 'inflation_cpi', 'oil_wti', 'gold']
 
-interface SeriesInfo {
-  id: string
+// Dynamically fetched series are keyed by prefix in selectedIds:
+//   stock:<SYMBOL> — Yahoo price history · macro:<FRED_ID> — live FRED series
+const STOCK_PREFIX = 'stock:'
+const MACRO_PREFIX = 'macro:'
+
+const isFetched = (id: string) => id.startsWith(STOCK_PREFIX) || id.startsWith(MACRO_PREFIX)
+
+interface DynamicSeries {
   label: string
   unit: string
-  values: number[]
-  color: string
-}
-
-// Stock series are keyed as `stock:<SYMBOL>` in selectedIds
-const STOCK_PREFIX = 'stock:'
-
-interface StockData {
-  label: string
-  values: number[] // aligned to FACTOR_YEARS (NaN where the ticker has no data)
-}
-
-// Keep only index pairs where both series have finite values, so stats
-// (Pearson, regression, cross-correlation) work for stocks with partial history.
-function finitePairs(a: number[], b: number[]): [number[], number[]] {
-  const xs: number[] = []
-  const ys: number[] = []
-  const n = Math.min(a.length, b.length)
-  for (let i = 0; i < n; i++) {
-    if (Number.isFinite(a[i]) && Number.isFinite(b[i])) {
-      xs.push(a[i])
-      ys.push(b[i])
-    }
-  }
-  return [xs, ys]
-}
-
-/** SVG ids must not contain symbol characters like ^ or : */
-function svgId(prefix: string, raw: string): string {
-  return `${prefix}-${raw.replace(/[^a-zA-Z0-9_-]/g, '_')}`
+  values: number[] // aligned to FACTOR_YEARS (NaN where the series has no data)
 }
 
 function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
@@ -70,229 +64,85 @@ function Panel({ children, sx }: { children: React.ReactNode; sx?: object }) {
   )
 }
 
-function MiniChart({ series, onRemove }: { series: SeriesInfo; onRemove: () => void }) {
-  const { tokens } = useDesignMode()
-  const ct = tokens.chart
-  const gradientId = svgId('mini-grad', series.id)
-  const data = useMemo(
-    () => FACTOR_YEARS.map((year, i) => ({
-      year,
-      value: Number.isFinite(series.values[i]) ? series.values[i] : null,
-    })),
-    [series]
-  )
-  return (
-    <Box
-      sx={{
-        bgcolor: tokens.insetBg, borderRadius: '10px', p: '12px 14px',
-        transition: 'background 0.15s', position: 'relative',
-        '&:hover': { background: tokens.insetHover }, '&:hover .rm-btn': { opacity: 1 },
-      }}
-    >
-      <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 1 }}>
-        <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: series.color, flexShrink: 0 }} />
-        <Typography sx={{ fontSize: 11, fontWeight: 600, color: tokens.textBody, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {series.label}
-        </Typography>
-        <Typography sx={{ fontSize: 10, color: 'text.disabled', ml: 'auto' }}>{series.unit}</Typography>
-        <IconButton
-          className="rm-btn"
-          size="small"
-          onClick={onRemove}
-          sx={{ p: 0.25, opacity: 0, transition: 'opacity 0.15s' }}
-        >
-          <CloseIcon sx={{ fontSize: 13 }} />
-        </IconButton>
-      </Stack>
-      <Box sx={{ height: 110 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} syncId="analytics-sync" margin={{ top: 4, right: 6, bottom: 0, left: 0 }}>
-            {ct.areaGradient && (
-              <defs>
-                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={series.color} stopOpacity={0.25} />
-                  <stop offset="95%" stopColor={series.color} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-            )}
-            <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
-            <XAxis dataKey="year" tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} minTickGap={20} />
-            <YAxis tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} width={34} />
-            <Tooltip
-              cursor={ct.cursor ?? true}
-              contentStyle={ct.tooltip}
-              labelStyle={ct.tooltipLabel}
-            />
-            {ct.areaGradient && (
-              <Area
-                type="monotone"
-                dataKey="value"
-                stroke="none"
-                fill={`url(#${gradientId})`}
-                connectNulls={false}
-                activeDot={false}
-                legendType="none"
-                tooltipType="none"
-              />
-            )}
-            <Line type="monotone" dataKey="value" name={series.label} stroke={series.color} strokeWidth={1.8} dot={false} activeDot={{ r: 4 }} fill={series.color} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </Box>
-    </Box>
-  )
+async function loadStockSeries(symbol: string, shortname?: string): Promise<DynamicSeries> {
+  const pts = await fetchHistory(symbol, 'max')
+  if (!pts.length) throw new Error('no data')
+  const values = toFactorYearValues(toYearlyPrices(pts))
+  if (values.filter(Number.isFinite).length < 4) throw new Error('insufficient overlap')
+  const name = shortname && shortname !== symbol ? ` · ${shortname}` : ''
+  return { label: `${symbol}${name}`, unit: 'USD', values }
 }
 
-interface DrawerData { ri: number; ci: number }
-
-function DetailDrawer({ open, cell, series, onClose }: {
-  open: boolean
-  cell: DrawerData | null
-  series: SeriesInfo[]
-  onClose: () => void
-}) {
-  const { tokens } = useDesignMode()
-  const ct = tokens.chart
-  const content = useMemo(() => {
-    if (!cell) return null
-    const rowS = series[cell.ri]
-    const colS = series[cell.ci]
-    if (!rowS || !colS) return null
-    const [x, y] = finitePairs(colS.values, rowS.values)
-    if (x.length < 3) return null
-    const { r } = pearsonCorrelation(x, y)
-    const reg = linearRegression(x, y)
-    const points = x
-      .map((xv, i) => ({ x: xv, y: y[i], reg: reg.intercept + reg.slope * xv }))
-      .sort((a, b) => a.x - b.x)
-    const xcorr = crossCorrelation(x, y, 2)
-    const interpretation = `${rowS.label} and ${colS.label} show r = ${r.toFixed(3)} (R² = ${(r * r).toFixed(3)}) over ${x.length} annual observations. ${Math.abs(r) > 0.4 ? 'This is a statistically robust relationship suitable for factor-model inclusion.' : 'This relationship warrants further regime-conditional testing before production use.'}`
-    return { rowS, colS, r, reg, points, xcorr, interpretation }
-  }, [cell, series])
-
-  return (
-    <>
-      {/* Overlay */}
-      <Box
-        onClick={onClose}
-        sx={{
-          position: 'fixed', inset: 0, bgcolor: tokens.overlay, zIndex: 199,
-          opacity: open ? 1 : 0, pointerEvents: open ? 'auto' : 'none', transition: 'opacity 0.25s ease',
-        }}
-      />
-      {/* Drawer */}
-      <Box
-        sx={{
-          position: 'fixed', top: 0, right: 0, height: '100vh', width: { xs: '100%', sm: 440 },
-          bgcolor: 'background.paper', borderLeft: '1px solid', borderColor: 'divider', zIndex: 200,
-          boxShadow: tokens.drawerShadow,
-          transform: open ? 'translateX(0)' : 'translateX(100%)',
-          transition: 'transform 0.25s cubic-bezier(.4,0,.2,1)', overflowY: 'auto',
-        }}
-      >
-        {content && (
-          <Box sx={{ p: 3 }}>
-            <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'flex-start', mb: 2.5 }}>
-              <Box>
-                <Typography sx={{ fontSize: 10, fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.5px', mb: 0.5 }}>
-                  Pairwise Analysis
-                </Typography>
-                <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{content.rowS.label}</Typography>
-                <Typography sx={{ fontSize: 12, color: 'text.disabled', my: 0.25 }}>vs</Typography>
-                <Typography sx={{ fontSize: 16, fontWeight: 700 }}>{content.colS.label}</Typography>
-              </Box>
-              <IconButton onClick={onClose} size="small" sx={{ border: '1px solid', borderColor: 'divider', bgcolor: tokens.insetBg }}>
-                <CloseIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Stack>
-
-            {/* Key metrics */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 2.25 }}>
-              {[
-                { label: 'Pearson r', val: content.r.toFixed(3), big: true },
-                { label: 'R²', val: (content.r * content.r).toFixed(3), big: true },
-                { label: 'Period', val: `${content.points.length}Y Annual`, big: false },
-                { label: 'Observations', val: `${content.points.length} pts`, big: false },
-              ].map(m => (
-                <Box key={m.label} sx={{ bgcolor: tokens.insetBg, borderRadius: '10px', p: m.big ? 1.75 : 1.5 }}>
-                  <Typography sx={{ fontSize: 9, fontWeight: 600, color: 'text.disabled', textTransform: 'uppercase', letterSpacing: '0.6px', mb: 0.6 }}>
-                    {m.label}
-                  </Typography>
-                  <Typography sx={{ fontSize: m.big ? 24 : 13, fontWeight: m.big ? 700 : 600, color: m.big ? tokens.textStrong : tokens.textBody, letterSpacing: m.big ? '-0.8px' : 0 }}>
-                    {m.val}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-
-            {/* Scatter + OLS */}
-            <Box sx={{ bgcolor: tokens.insetBg, borderRadius: '10px', p: 1.75, mb: 1.75 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 600, color: tokens.textBody, mb: 1.25 }}>Scatter Plot · OLS Regression</Typography>
-              <Box sx={{ height: 190 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={content.points} margin={{ top: 4, right: 8, bottom: 0, left: 0 }}>
-                    <CartesianGrid strokeDasharray={ct.gridDash} stroke={ct.grid} />
-                    <XAxis type="number" dataKey="x" name={content.colS.label} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} />
-                    <YAxis type="number" dataKey="y" name={content.rowS.label} tick={{ fontSize: 9, fill: ct.tick }} axisLine={false} tickLine={false} width={40} />
-                    <Tooltip contentStyle={ct.tooltip} labelStyle={ct.tooltipLabel} cursor={ct.scatterCursor} />
-                    <Scatter dataKey="y" fill={tokens.accent} fillOpacity={0.5} />
-                    <Line type="linear" dataKey="reg" stroke={tokens.neg} strokeWidth={2} dot={false} activeDot={false} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </Box>
-            </Box>
-
-            {/* Lag analysis */}
-            <Box sx={{ bgcolor: tokens.insetBg, borderRadius: '10px', p: 1.75, mb: 1.75 }}>
-              <Typography sx={{ fontSize: 11, fontWeight: 600, color: tokens.textBody, mb: 1.25 }}>Cross-Correlation by Lag</Typography>
-              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 0.6 }}>
-                {content.xcorr.lags.map((lag, i) => {
-                  const v = content.xcorr.correlations[i]
-                  const isPeak = lag === content.xcorr.peakLag
-                  return (
-                    <Box key={lag} sx={{ textAlign: 'center', bgcolor: isPeak ? 'primary.main' : tokens.lagCellBg, borderRadius: '7px', p: '9px 4px', border: '1px solid', borderColor: isPeak ? 'primary.main' : 'divider' }}>
-                      <Typography sx={{ fontSize: 9, color: isPeak ? tokens.peakLagSubtext : 'text.disabled', mb: 0.4, fontWeight: 500 }}>
-                        {lag >= 0 ? '+' : ''}{lag}y
-                      </Typography>
-                      <Typography sx={{ fontSize: 12, fontWeight: 700, color: isPeak ? '#fff' : tokens.textBody }}>{v.toFixed(2)}</Typography>
-                    </Box>
-                  )
-                })}
-              </Box>
-            </Box>
-
-            {/* Interpretation */}
-            <Box sx={{ bgcolor: tokens.accentBg, border: `1px solid ${tokens.accentBorder}`, borderRadius: '10px', p: 1.75 }}>
-              <Stack direction="row" sx={{ alignItems: 'center', gap: 0.75, mb: 1 }}>
-                <Box sx={{ width: 3, height: 14, bgcolor: 'primary.main', borderRadius: '2px' }} />
-                <Typography sx={{ fontSize: 11, fontWeight: 700, color: tokens.accentText }}>Statistical Interpretation</Typography>
-              </Stack>
-              <Typography sx={{ fontSize: 11, color: tokens.textBody, lineHeight: 1.65 }}>{content.interpretation}</Typography>
-            </Box>
-          </Box>
-        )}
-      </Box>
-    </>
-  )
+async function loadMacroSeries(def: MacroSeriesDef): Promise<DynamicSeries> {
+  const res = await fetchMacroSeries(def.id)
+  if (!res || !res.points.length) throw new Error('no data')
+  // YoY % is the meaningful annual view for level series like CPI or M2
+  const points = def.yoy ? toYoY(res.points) : res.points
+  const values = toFactorYearValues(toAnnual(points))
+  if (values.filter(Number.isFinite).length < 4) throw new Error('insufficient overlap')
+  return {
+    label: def.yoy ? `${def.label} YoY` : def.label,
+    unit: def.yoy ? '%' : def.unit,
+    values,
+  }
 }
 
-export default function AnalyticsPage() {
+function AnalyticsContent() {
   const { mode, tokens } = useDesignMode()
+  const searchParams = useSearchParams()
   const allFactors = useMemo(() => getAllFactors(), [])
-  const [selectedIds, setSelectedIds] = useState<string[]>(DEFAULT_SERIES)
+
+  // Seed the selection from ?series= so shared links restore on first render
+  // (useSearchParams is available at render time — no setState in an effect).
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => {
+    const param = searchParams.get('series')
+    if (!param) return DEFAULT_SERIES
+    const ids = param.split(',').filter(id =>
+      isFetched(id) || allFactors.some(f => f.id === id)
+    )
+    return ids.length ? ids : DEFAULT_SERIES
+  })
+
   const [addAnchor, setAddAnchor] = useState<null | HTMLElement>(null)
   const [drawerCell, setDrawerCell] = useState<DrawerData | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  // Stock series: fetched data keyed by `stock:<SYMBOL>`, plus in-flight and error state
-  const [stockData, setStockData] = useState<Record<string, StockData>>({})
-  const [loadingStocks, setLoadingStocks] = useState<string[]>([])
-  const [stockError, setStockError] = useState<string | null>(null)
+  // Fetched series (stock: / macro:) keyed by prefixed id
+  const [dynamicData, setDynamicData] = useState<Record<string, DynamicSeries>>({})
+  const [seriesError, setSeriesError] = useState<string | null>(null)
+  const inFlight = useRef<Set<string>>(new Set())
 
   // Ticker search inside the Add menu
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searching, setSearching] = useState(false)
+
+  // Enriches stock labels with the name from the search result that added them
+  const shortnameHints = useRef<Record<string, string>>({})
+
+  // One fetch pipeline for every prefixed id, whether it arrived from the URL
+  // or from the Add menu: anything selected without data gets loaded once.
+  useEffect(() => {
+    for (const id of selectedIds) {
+      if (!isFetched(id) || dynamicData[id] || inFlight.current.has(id)) continue
+      const isStock = id.startsWith(STOCK_PREFIX)
+      const rawId = id.slice(id.indexOf(':') + 1)
+      const def = isStock ? null : getMacroDef(rawId)
+      if (!isStock && !def) continue
+      const symbol = rawId.toUpperCase()
+      const label = isStock ? symbol : def!.label
+
+      inFlight.current.add(id)
+      void (isStock ? loadStockSeries(symbol, shortnameHints.current[id]) : loadMacroSeries(def!))
+        .then(loaded => setDynamicData(d => ({ ...d, [id]: loaded })))
+        .catch(() => {
+          // Drop the failed series and surface a brief inline notice
+          setSelectedIds(ids => ids.filter(x => x !== id))
+          setSeriesError(`Couldn't load ${label} — series removed`)
+        })
+        .finally(() => inFlight.current.delete(id))
+    }
+  }, [selectedIds, dynamicData])
 
   useEffect(() => {
     const q = query.trim()
@@ -303,12 +153,23 @@ export default function AnalyticsPage() {
         return
       }
       setSearching(true)
-      const results = await searchTickers(q)
-      setSearchResults(results.slice(0, 6))
-      setSearching(false)
+      try {
+        const results = await searchTickers(q)
+        setSearchResults(results.slice(0, 6))
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearching(false)
+      }
     }, q ? 300 : 0)
     return () => clearTimeout(t)
   }, [query])
+
+  // Keep the URL shareable; the default selection stays clean (no query string)
+  useEffect(() => {
+    const isDefault = selectedIds.join(',') === DEFAULT_SERIES.join(',')
+    writeUrlParams({ series: isDefault ? null : selectedIds.join(',') })
+  }, [selectedIds])
 
   const closeAddMenu = () => {
     setAddAnchor(null)
@@ -316,55 +177,69 @@ export default function AnalyticsPage() {
     setSearchResults([])
   }
 
-  const addStock = async (result: SearchResult) => {
+  const addStock = (result: SearchResult) => {
     const id = `${STOCK_PREFIX}${result.symbol}`
     closeAddMenu()
     if (selectedIds.includes(id)) return
-    setStockError(null)
+    if (result.shortname) shortnameHints.current[id] = result.shortname
+    setSeriesError(null)
     setSelectedIds(ids => [...ids, id])
-    setLoadingStocks(l => [...l, id])
-    try {
-      const pts = await fetchHistory(result.symbol, 'max')
-      if (!pts.length) throw new Error('no data')
-      const values = toFactorYearValues(toYearlyPrices(pts))
-      if (values.filter(Number.isFinite).length < 4) throw new Error('insufficient overlap')
-      const name = result.shortname && result.shortname !== result.symbol ? ` · ${result.shortname}` : ''
-      setStockData(d => ({ ...d, [id]: { label: `${result.symbol}${name}`, values } }))
-    } catch {
-      // Remove the failed series and surface a brief inline notice
-      setSelectedIds(ids => ids.filter(x => x !== id))
-      setStockError(`Couldn't load ${result.symbol} — series removed`)
-    } finally {
-      setLoadingStocks(l => l.filter(x => x !== id))
-    }
+  }
+
+  const addMacro = (def: MacroSeriesDef) => {
+    const id = `${MACRO_PREFIX}${def.id}`
+    closeAddMenu()
+    if (selectedIds.includes(id)) return
+    setSeriesError(null)
+    setSelectedIds(ids => [...ids, id])
   }
 
   const series: SeriesInfo[] = useMemo(() =>
     selectedIds
       .map((id, idx) => {
         const color = tokens.factorColors[idx % tokens.factorColors.length]
-        if (id.startsWith(STOCK_PREFIX)) {
-          const s = stockData[id]
+        if (isFetched(id)) {
+          const s = dynamicData[id]
           if (!s) return null // still loading or failed
-          return { id, label: s.label, unit: 'USD', values: s.values, color }
+          return { id, label: s.label, unit: s.unit, values: s.values, color }
         }
         const f = allFactors.find(a => a.id === id)
         if (!f) return null
         return { id, label: getFactorMeta(id)?.label ?? id, unit: f.unit, values: f.values, color }
       })
       .filter((s): s is SeriesInfo => s !== null),
-    [selectedIds, allFactors, stockData, tokens.factorColors]
+    [selectedIds, allFactors, dynamicData, tokens.factorColors]
   )
 
-  const matrix = useMemo(
-    () => series.map(a => series.map(b => {
-      const [x, y] = finitePairs(a.values, b.values)
-      return x.length >= 3 ? pearsonCorrelation(x, y).r : 0
-    })),
-    [series]
-  )
+  // Anything selected but not yet resolved is in flight — derived, not stored.
+  const loadingIds = selectedIds.filter(id => isFetched(id) && !dynamicData[id])
+
+  // Pearson is symmetric — compute the upper triangle once and mirror it.
+  const matrix = useMemo(() => {
+    const n = series.length
+    const m: number[][] = Array.from({ length: n }, () => new Array(n).fill(0))
+    for (let ri = 0; ri < n; ri++) {
+      for (let ci = ri; ci < n; ci++) {
+        const [x, y] = finitePairs(series[ri].values, series[ci].values)
+        const r = x.length >= 3 ? pearsonCorrelation(x, y).r : 0
+        m[ri][ci] = r
+        m[ci][ri] = r
+      }
+    }
+    return m
+  }, [series])
 
   const available = allFactors.filter(f => !selectedIds.includes(f.id))
+  const availableMacro = MACRO_SERIES.filter(s => !selectedIds.includes(`${MACRO_PREFIX}${s.id}`))
+
+  const exportSeriesCsv = () => {
+    if (!series.length) return
+    downloadCsv(
+      'comparative-analysis.csv',
+      ['year', ...series.map(s => s.label)],
+      FACTOR_YEARS.map((y, i) => [y, ...series.map(s => (Number.isFinite(s.values[i]) ? s.values[i] : ''))])
+    )
+  }
 
   const openDrawer = (ri: number, ci: number) => {
     setDrawerCell({ ri, ci })
@@ -379,16 +254,22 @@ export default function AnalyticsPage() {
         <Box>
           <Typography variant="h4" sx={{ fontSize: 20 }}>Comparative Analysis</Typography>
           <Typography sx={{ fontSize: 12, color: 'text.disabled', mt: 0.4 }}>
-            Synchronized multi-series · hover any chart to sync all · 21Y annual · click a matrix cell for detail
+            Synchronized multi-series · hover any chart to sync all · {FACTOR_YEARS.length}Y annual · click a matrix cell for detail
           </Typography>
         </Box>
         <Stack direction="row" sx={{ alignItems: 'center', gap: 1.25 }}>
-          {stockError && (
-            <Typography sx={{ fontSize: 11, color: tokens.neg, fontWeight: 500 }}>{stockError}</Typography>
+          {seriesError && (
+            <Typography sx={{ fontSize: 11, color: tokens.neg, fontWeight: 500 }}>{seriesError}</Typography>
           )}
+          <CopyLinkButton />
+          <Tooltip title="Download all series (CSV)">
+            <IconButton size="small" onClick={exportSeriesCsv} aria-label="Download all series as CSV" sx={{ border: '1px solid', borderColor: 'divider' }}>
+              <DownloadIcon sx={{ fontSize: 15 }} />
+            </IconButton>
+          </Tooltip>
           <Box
             component="button"
-            onClick={(e) => { setStockError(null); setAddAnchor(e.currentTarget) }}
+            onClick={(e) => { setSeriesError(null); setAddAnchor(e.currentTarget) }}
             sx={{
               display: 'flex', alignItems: 'center', gap: 0.6, px: 1.5, py: 0.9, borderRadius: '10px',
               border: '1px solid', borderColor: 'divider', bgcolor: 'background.paper', cursor: 'pointer',
@@ -413,7 +294,7 @@ export default function AnalyticsPage() {
               slotProps={{
                 input: {
                   sx: { fontSize: 13, borderRadius: '8px' },
-                  endAdornment: searching ? <CircularProgress size={14} sx={{ ml: 1 }} /> : null,
+                  endAdornment: searching ? <CircularProgress size={14} sx={{ ml: 1 }} aria-label="Searching tickers" /> : null,
                 },
               }}
             />
@@ -429,6 +310,18 @@ export default function AnalyticsPage() {
           {query.trim() !== '' && !searching && searchResults.length === 0 && (
             <Typography sx={{ px: 1.75, py: 0.75, fontSize: 12, color: 'text.disabled' }}>No tickers found</Typography>
           )}
+          {availableMacro.length > 0 && [
+            <Divider key="mdiv" sx={{ my: 0.5 }} />,
+            <ListSubheader key="mhdr" sx={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: '26px' }}>
+              Live Macro (FRED)
+            </ListSubheader>,
+            ...availableMacro.map(s => (
+              <MenuItem key={s.id} onClick={() => addMacro(s)} sx={{ fontSize: 13, gap: 0.75 }}>
+                {s.yoy ? `${s.label} YoY` : s.label}
+                <Typography component="span" sx={{ fontSize: 11, color: 'text.disabled' }}>{s.id}</Typography>
+              </MenuItem>
+            )),
+          ]}
           {available.length > 0 && [
             <Divider key="div" sx={{ my: 0.5 }} />,
             <ListSubheader key="hdr" sx={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', lineHeight: '26px' }}>
@@ -453,16 +346,16 @@ export default function AnalyticsPage() {
           <Typography sx={{ fontSize: 13, fontWeight: 600 }}>Synchronized Time Series</Typography>
           <Typography sx={{ fontSize: 11, color: 'text.disabled' }}>Hover to cross-highlight all series · {series.length} graphs</Typography>
         </Stack>
-        {series.length === 0 && loadingStocks.length === 0 ? (
+        {series.length === 0 && loadingIds.length === 0 ? (
           <Typography sx={{ fontSize: 13, color: 'text.disabled', py: 4, textAlign: 'center' }}>
-            No series selected — use “Add Graph” to add factors or stocks.
+            No series selected — use “Add Graph” to add factors, stocks, or live macro data.
           </Typography>
         ) : (
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' }, gap: 1.25 }}>
             {series.map(s => (
               <MiniChart key={s.id} series={s} onRemove={() => setSelectedIds(ids => ids.filter(id => id !== s.id))} />
             ))}
-            {loadingStocks.map(id => (
+            {loadingIds.map(id => (
               <Box
                 key={id}
                 sx={{
@@ -472,7 +365,7 @@ export default function AnalyticsPage() {
               >
                 <CircularProgress size={16} />
                 <Typography sx={{ fontSize: 11, fontWeight: 600, color: 'text.disabled' }}>
-                  Loading {id.slice(STOCK_PREFIX.length)}…
+                  Loading {id.slice(id.indexOf(':') + 1)}…
                 </Typography>
               </Box>
             ))}
@@ -510,6 +403,15 @@ export default function AnalyticsPage() {
                       <td key={ci} style={{ padding: 0 }}>
                         <Box
                           onClick={() => !diag && openDrawer(ri, ci)}
+                          role={diag ? undefined : 'button'}
+                          tabIndex={diag ? undefined : 0}
+                          aria-label={diag ? undefined : `Open ${series[ri]?.label} vs ${series[ci]?.label} analysis, r = ${v.toFixed(2)}`}
+                          onKeyDown={e => {
+                            if (!diag && (e.key === 'Enter' || e.key === ' ')) {
+                              e.preventDefault()
+                              openDrawer(ri, ci)
+                            }
+                          }}
                           sx={{
                             width: 84, height: 44, bgcolor: tokens.corrColor(v), borderRadius: '7px',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -544,5 +446,14 @@ export default function AnalyticsPage() {
 
       <DetailDrawer open={drawerOpen} cell={drawerCell} series={series} onClose={closeDrawer} />
     </Box>
+  )
+}
+
+export default function AnalyticsPage() {
+  // useSearchParams requires a Suspense boundary for the prerender pass.
+  return (
+    <Suspense fallback={<Skeleton variant="rounded" height={480} sx={{ borderRadius: '14px' }} />}>
+      <AnalyticsContent />
+    </Suspense>
   )
 }
