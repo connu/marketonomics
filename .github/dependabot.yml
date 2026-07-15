@@ -1,3 +1,7 @@
+# Dependabot opens update PRs; a human reviews and merges them.
+# Auto-merge was removed deliberately — do not re-add a workflow that calls
+# `gh pr merge --auto`. Dependency bumps land only via manual approval.
+
 version: 2
 updates:
   # Weekly npm dependency updates
